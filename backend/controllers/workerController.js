@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const GPSLog = require('../models/GPSLog');
 const User = require('../models/User');
+const WorkerPayment = require('../models/WorkerPayment');
 const { emitGpsUpdate } = require('../services/socketService');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -14,43 +15,6 @@ const getWorkers = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: workers,
-  });
-});
-
-const postAttendance = asyncHandler(async (req, res) => {
-  const { latitude, longitude, address } = req.body;
-  const organizationId = getOrganizationId(req.user);
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-
-  const attendance = await Attendance.findOneAndUpdate(
-    {
-      organizationId,
-      workerId: req.user._id,
-      date,
-    },
-    {
-      organizationId,
-      workerId: req.user._id,
-      date,
-      checkInTime: new Date(),
-      location: {
-        latitude,
-        longitude,
-        address,
-      },
-    },
-    {
-      upsert: true,
-      new: true,
-      setDefaultsOnInsert: true,
-    },
-  );
-
-  res.status(201).json({
-    success: true,
-    message: 'Attendance recorded successfully.',
-    data: attendance,
   });
 });
 
@@ -87,8 +51,54 @@ const postGps = asyncHandler(async (req, res) => {
   });
 });
 
+const getWorkerEarnings = asyncHandler(async (req, res) => {
+  const organizationId = getOrganizationId(req.user);
+  const workerId = req.user._id;
+  const [records, paymentSummary] = await Promise.all([
+    Attendance.find({
+      organizationId,
+      workerId,
+    }).sort({ date: -1 }),
+    WorkerPayment.aggregate([
+      {
+        $match: {
+          organizationId,
+          workerId,
+        },
+      },
+      {
+        $group: {
+          _id: '$workerId',
+          totalPaid: { $sum: '$amountPaid' },
+        },
+      },
+    ]),
+  ]);
+
+  const totalDaysWorked = records.length;
+  const totalEarnings = records.reduce((sum, record) => sum + (record.dailyWage || 0), 0);
+  const totalPaid = paymentSummary[0]?.totalPaid || 0;
+
+  res.json({
+    success: true,
+    data: {
+      totalDaysWorked,
+      totalEarnings,
+      totalPaid,
+      outstandingBalance: Number((totalEarnings - totalPaid).toFixed(2)),
+      dailyEarnings: records.map((record) => ({
+        _id: record._id,
+        date: record.date,
+        checkInTime: record.checkInTime,
+        checkOutTime: record.checkOutTime,
+        dailyWage: record.dailyWage || 0,
+      })),
+    },
+  });
+});
+
 module.exports = {
   getWorkers,
-  postAttendance,
   postGps,
+  getWorkerEarnings,
 };

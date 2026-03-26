@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { DEFAULT_API_BASE_URL, normalizeApiBaseUrl } from './config';
+import { showToast } from './toast';
 
 let authToken: string | null = null;
 let apiBaseUrl = DEFAULT_API_BASE_URL;
@@ -26,6 +27,18 @@ const logApi = (label: string, payload: Record<string, unknown>) => {
 
   console.log(`[API] ${label}`, payload);
 };
+
+export const getApiErrorStatus = (error: unknown) => {
+  if (!error || typeof error !== 'object' || !('status' in error)) {
+    return undefined;
+  }
+
+  const status = (error as { status?: unknown }).status;
+
+  return typeof status === 'number' ? status : undefined;
+};
+
+export const isRouteNotFoundError = (error: unknown) => getApiErrorStatus(error) === 404;
 
 export const setApiToken = (token?: string | null) => {
   authToken = token || null;
@@ -94,6 +107,12 @@ api.interceptors.response.use(
 
     const message =
       error?.response?.data?.message || error?.message || 'Unexpected API error.';
+
+    showToast({
+      type: 'error',
+      title: 'Request failed',
+      message,
+    });
 
     return Promise.reject(
       Object.assign(new Error(message), {

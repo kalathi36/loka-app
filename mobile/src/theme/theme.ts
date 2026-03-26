@@ -18,7 +18,7 @@ const radius = {
 };
 
 const fontFamily = {
-  heading: Platform.select({ ios: 'Avenir Next', android: 'sans-serif-condensed' }) || 'System',
+  heading: Platform.select({ ios: 'Avenir Next', android: 'sans-serif-medium' }) || 'System',
   body: Platform.select({ ios: 'Avenir', android: 'sans-serif' }) || 'System',
 };
 

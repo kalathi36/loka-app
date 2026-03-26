@@ -6,13 +6,74 @@ import { useAuth } from '../store/AuthContext';
 import DeliveryScreen from '../screens/worker/DeliveryScreen';
 import AssignedOrdersScreen from '../screens/worker/AssignedOrdersScreen';
 import AttendanceScreen from '../screens/worker/AttendanceScreen';
+import EarningsScreen from '../screens/worker/EarningsScreen';
 import MapNavigationScreen from '../screens/worker/MapNavigationScreen';
 import WorkerHomeScreen from '../screens/worker/WorkerHomeScreen';
-import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import WorkerManageScreen from '../screens/worker/WorkerManageScreen';
+import EditProfileScreen from '../screens/common/EditProfileScreen';
+import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
+import ProfileScreen from '../screens/common/ProfileScreen';
+import {
+  buildStackScreenOptions,
+  buildTabScreenOptions,
+  createRoleTabNavigator,
+  renderTabGlyph,
+} from './navigationStyles';
 import { useAppTheme } from '../theme/ThemeProvider';
 
-const Stack = createStackNavigator();
-const renderThemeToggle = () => <ThemeToggleButton compact />;
+const Tab = createRoleTabNavigator();
+const HomeStack = createStackNavigator();
+const ManageStack = createStackNavigator();
+const ProfileStack = createStackNavigator();
+
+const WorkerHomeStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <HomeStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <HomeStack.Screen name="WorkerHome" component={WorkerHomeScreen} options={{ title: 'Worker Hub' }} />
+    </HomeStack.Navigator>
+  );
+};
+
+const WorkerManageStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <ManageStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <ManageStack.Screen name="WorkerManage" component={WorkerManageScreen} options={{ title: 'Manage' }} />
+      <ManageStack.Screen
+        name="AssignedOrders"
+        component={AssignedOrdersScreen}
+        options={{ title: 'Assigned Orders' }}
+      />
+      <ManageStack.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
+      <ManageStack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Earnings' }} />
+      <ManageStack.Screen name="Delivery" component={DeliveryScreen} options={{ title: 'Delivery Update' }} />
+      <ManageStack.Screen
+        name="MapNavigation"
+        component={MapNavigationScreen}
+        options={{ title: 'Navigation Map' }}
+      />
+    </ManageStack.Navigator>
+  );
+};
+
+const WorkerProfileStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <ProfileStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <ProfileStack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
+      <ProfileStack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{ title: 'Forgot Password' }}
+      />
+    </ProfileStack.Navigator>
+  );
+};
 
 const WorkerStack = () => {
   const { user } = useAuth();
@@ -55,33 +116,32 @@ const WorkerStack = () => {
   }, [user?.role]);
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        cardStyle: { backgroundColor: theme.colors.background },
-        headerStyle: { backgroundColor: theme.colors.background },
-        headerTintColor: theme.colors.text,
-        headerTitleStyle: {
-          color: theme.colors.text,
-          fontFamily: theme.fontFamily.heading,
-        },
-        headerRight: renderThemeToggle,
-        headerRightContainerStyle: { paddingRight: 12 },
-      }}
-    >
-      <Stack.Screen name="WorkerHome" component={WorkerHomeScreen} options={{ title: 'Worker Hub' }} />
-      <Stack.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
-      <Stack.Screen
-        name="AssignedOrders"
-        component={AssignedOrdersScreen}
-        options={{ title: 'Assigned Orders' }}
+    <Tab.Navigator screenOptions={buildTabScreenOptions(theme)}>
+      <Tab.Screen
+        name="WorkerHomeTab"
+        component={WorkerHomeStack}
+        options={{
+          title: 'Home',
+          ...renderTabGlyph('speedometer-outline'),
+        }}
       />
-      <Stack.Screen name="Delivery" component={DeliveryScreen} options={{ title: 'Delivery Update' }} />
-      <Stack.Screen
-        name="MapNavigation"
-        component={MapNavigationScreen}
-        options={{ title: 'Navigation Map' }}
+      <Tab.Screen
+        name="WorkerManageTab"
+        component={WorkerManageStack}
+        options={{
+          title: 'Manage',
+          ...renderTabGlyph('briefcase-outline'),
+        }}
       />
-    </Stack.Navigator>
+      <Tab.Screen
+        name="WorkerProfileTab"
+        component={WorkerProfileStack}
+        options={{
+          title: 'Profile',
+          ...renderTabGlyph('person-circle-outline'),
+        }}
+      />
+    </Tab.Navigator>
   );
 };
 

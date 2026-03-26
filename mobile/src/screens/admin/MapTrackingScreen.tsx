@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { EmptyState } from '../../components/EmptyState';
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
 import api from '../../services/api';
+import { getLocationDetails, LocationDetails, openInExternalMap } from '../../services/location';
 import { getSocket } from '../../services/socket';
 import { ApiEnvelope, WorkerLocation } from '../../types';
 import { AppTheme } from '../../theme/theme';
@@ -20,21 +22,42 @@ const fallbackRegion = {
 const MapTrackingScreen = () => {
   const styles = useThemedStyles(createStyles);
   const [locations, setLocations] = useState<WorkerLocation[]>([]);
+  const [locationDetails, setLocationDetails] = useState<Record<string, LocationDetails>>({});
   const [error, setError] = useState('');
 
-  const loadLocations = async () => {
+  const hydrateLocationDetails = useCallback(async (entries: WorkerLocation[]) => {
+    const resolvedEntries = await Promise.all(
+      entries.map(async (entry) => [
+        entry.workerId,
+        await getLocationDetails(entry, entry.workerName || 'Worker location'),
+      ] as const),
+    );
+
+    setLocationDetails((current) => {
+      const next = { ...current };
+
+      resolvedEntries.forEach(([workerId, details]) => {
+        next[workerId] = details;
+      });
+
+      return next;
+    });
+  }, []);
+
+  const loadLocations = useCallback(async () => {
     try {
       setError('');
       const response = await api.get<ApiEnvelope<WorkerLocation[]>>('/admin/worker-locations');
       setLocations(response.data.data);
+      hydrateLocationDetails(response.data.data).catch(() => null);
     } catch (loadError) {
       setError(extractErrorMessage(loadError));
     }
-  };
+  }, [hydrateLocationDetails]);
 
   useEffect(() => {
     loadLocations();
-  }, []);
+  }, [loadLocations]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -56,6 +79,15 @@ const MapTrackingScreen = () => {
         nextLocations[index] = { ...nextLocations[index], ...payload };
         return nextLocations;
       });
+
+      getLocationDetails(payload, payload.workerName || 'Worker location')
+        .then((details) => {
+          setLocationDetails((current) => ({
+            ...current,
+            [payload.workerId]: details,
+          }));
+        })
+        .catch(() => null);
     };
 
     socket.on('gps:updated', onGpsUpdated);
@@ -102,10 +134,21 @@ const MapTrackingScreen = () => {
         locations.map((location) => (
           <View key={location.workerId} style={styles.locationCard}>
             <Text style={styles.workerName}>{location.workerName}</Text>
+            <Text style={styles.locationTitle}>
+              {locationDetails[location.workerId]?.title || 'Resolving worker location...'}
+            </Text>
             <Text style={styles.locationMeta}>
-              {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+              {locationDetails[location.workerId]?.subtitle || 'Live route update received.'}
+            </Text>
+            <Text style={styles.locationMeta}>
+              {locationDetails[location.workerId]?.coordinates || ''}
             </Text>
             <Text style={styles.locationMeta}>Updated {formatDateTime(location.timestamp)}</Text>
+            <PrimaryButton
+              label="Open in Maps"
+              variant="outline"
+              onPress={() => openInExternalMap(location, location.workerName)}
+            />
           </View>
         ))
       )}
@@ -141,6 +184,11 @@ const createStyles = (theme: AppTheme) =>
       fontFamily: theme.fontFamily.heading,
       fontSize: 18,
       fontWeight: '700',
+    },
+    locationTitle: {
+      color: theme.colors.text,
+      fontSize: 15,
+      fontWeight: '600',
     },
     locationMeta: {
       color: theme.colors.textMuted,

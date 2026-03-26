@@ -159,9 +159,90 @@ const login = asyncHandler(async (req, res) => {
   });
 });
 
+const getProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).populate('organizationId', 'name code');
+
+  res.json({
+    success: true,
+    data: serializeUser(user),
+  });
+});
+
+const updateProfile = asyncHandler(async (req, res) => {
+  const { name, phone } = req.body;
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    throw new ApiError('User not found.', 404);
+  }
+
+  if (phone && phone !== user.phone) {
+    const existingUser = await User.findOne({ phone });
+
+    if (existingUser && String(existingUser._id) !== String(user._id)) {
+      throw new ApiError('An account with this phone number already exists.', 409);
+    }
+
+    user.phone = phone.trim();
+  }
+
+  if (name) {
+    user.name = name.trim();
+  }
+
+  await user.save();
+
+  const populatedUser = await User.findById(user._id).populate('organizationId', 'name code');
+
+  res.json({
+    success: true,
+    message: 'Profile updated successfully.',
+    data: buildAuthResponse(populatedUser),
+  });
+});
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { organizationCode, phone, newPassword } = req.body;
+
+  if (!organizationCode || !phone || !newPassword) {
+    throw new ApiError('Organization code, phone, and new password are required.', 400);
+  }
+
+  const organization = await Organization.findOne({
+    code: normalizeOrganizationCode(organizationCode),
+  });
+
+  if (!organization) {
+    throw new ApiError('Organization not found for the provided code.', 404);
+  }
+
+  const user = await User.findOne({
+    organizationId: organization._id,
+    phone: phone.trim(),
+  });
+
+  if (!user) {
+    throw new ApiError('No account matches the provided organization code and phone.', 404);
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  res.json({
+    success: true,
+    message: 'Password updated successfully.',
+    data: {
+      phone: user.phone,
+    },
+  });
+});
+
 module.exports = {
   register: registerUser,
   registerOrganization,
   registerUser,
   login,
+  getProfile,
+  updateProfile,
+  forgotPassword,
 };

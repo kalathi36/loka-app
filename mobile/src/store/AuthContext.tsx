@@ -19,6 +19,11 @@ interface RegisterUserPayload {
   role: 'worker' | 'customer';
 }
 
+interface UpdateProfilePayload {
+  name: string;
+  phone: string;
+}
+
 interface AuthContextValue {
   user: User | null;
   token: string | null;
@@ -29,6 +34,7 @@ interface AuthContextValue {
   login: (phone: string, password: string) => Promise<void>;
   registerUser: (payload: RegisterUserPayload) => Promise<void>;
   registerOrganization: (payload: RegisterOrganizationPayload) => Promise<void>;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -126,6 +132,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const updateProfile = async (payload: UpdateProfilePayload) => {
+    const response = await api.put<
+      ApiEnvelope<{
+        token: string;
+        user: User;
+      }>
+    >('/auth/profile', payload);
+
+    await applySession(response.data.data.token, response.data.data.user);
+  };
+
   const logout = async () => {
     setUser(null);
     setToken(null);
@@ -146,6 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         login,
         registerUser,
         registerOrganization,
+        updateProfile,
         logout,
       }}
     >

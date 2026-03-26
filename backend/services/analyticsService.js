@@ -2,6 +2,8 @@ const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const Product = require('../models/Product');
 const User = require('../models/User');
+const Attendance = require('../models/Attendance');
+const WorkerPayment = require('../models/WorkerPayment');
 
 const getDashboardAnalytics = async (organizationId) => {
   const scope = organizationId ? { organizationId } : {};
@@ -14,6 +16,8 @@ const getDashboardAnalytics = async (organizationId) => {
     statusBreakdown,
     deliveredRevenue,
     paymentSummary,
+    workerCostSummary,
+    workerPaidSummary,
   ] = await Promise.all([
     Product.countDocuments(scope),
     User.countDocuments({ ...scope, role: 'worker' }),
@@ -56,6 +60,28 @@ const getDashboardAnalytics = async (organizationId) => {
         },
       },
     ]),
+    Attendance.aggregate([
+      {
+        $match: scope,
+      },
+      {
+        $group: {
+          _id: null,
+          totalWorkerCost: { $sum: '$dailyWage' },
+        },
+      },
+    ]),
+    WorkerPayment.aggregate([
+      {
+        $match: scope,
+      },
+      {
+        $group: {
+          _id: null,
+          totalPaidToWorkers: { $sum: '$amountPaid' },
+        },
+      },
+    ]),
   ]);
 
   const ordersByStatus = statusBreakdown.reduce(
@@ -80,6 +106,8 @@ const getDashboardAnalytics = async (organizationId) => {
     totalWorkers,
     totalCustomers,
     totalOrders,
+    totalWorkerCost: workerCostSummary[0]?.totalWorkerCost || 0,
+    totalPaidToWorkers: workerPaidSummary[0]?.totalPaidToWorkers || 0,
     deliveredRevenue: deliveredRevenue[0]?.total || 0,
     outstandingPayments,
     ordersByStatus,

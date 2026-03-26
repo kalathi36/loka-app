@@ -1,66 +1,138 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import api from '../services/api';
 import { getSocket, joinChatRoom } from '../services/socket';
-import { ApiEnvelope, ChatMessage, User } from '../types';
+import { ApiEnvelope, ChatMessage, ChatThread, User } from '../types';
 import { AppTheme } from '../theme/theme';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { extractErrorMessage, formatDateTime, getEntityId } from '../utils/formatters';
 import { useAuth } from '../store/AuthContext';
+import { AppIcon } from './AppIcon';
 import { EmptyState } from './EmptyState';
-import { PrimaryButton } from './PrimaryButton';
 import { ScreenLayout } from './ScreenLayout';
-import { TextField } from './TextField';
+import { useAppTheme } from '../theme/ThemeProvider';
 
 interface ChatWorkspaceProps {
   title: string;
   subtitle: string;
 }
 
-export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
+const buildInitials = (name?: string) =>
+  (name || 'Loka')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0]?.toUpperCase() || '')
+    .join('');
+
+const combineContacts = (contacts: User[], threads: ChatThread[]) => {
+  const registry = new Map<string, User>();
+
+  threads.forEach((thread) => {
+    registry.set(thread.partner._id, thread.partner);
+  });
+
+  contacts.forEach((contact) => {
+    registry.set(contact._id, registry.get(contact._id) || contact);
+  });
+
+  return Array.from(registry.values());
+};
+
+export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorkspaceProps) => {
+  const { theme } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const { user } = useAuth();
+  const messageListRef = useRef<FlatList<ChatMessage>>(null);
   const [contacts, setContacts] = useState<User[]>([]);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
   const [selectedContact, setSelectedContact] = useState<User | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  const loadContacts = async () => {
-    try {
-      const response = await api.get<ApiEnvelope<User[]>>('/chat/contacts');
-      const nextContacts = response.data.data;
+  const conversationCards = useMemo<ChatThread[]>(
+    () =>
+      threads.length
+        ? threads
+        : contacts.map((contact) => ({
+            roomKey: contact._id,
+            partner: contact,
+            lastMessage: null,
+          })),
+    [contacts, threads],
+  );
 
-      setContacts(nextContacts);
+  const syncInbox = useCallback(async () => {
+    try {
+      setError('');
+      const [contactsResult, threadsResult] = await Promise.allSettled([
+        api.get<ApiEnvelope<User[]>>('/chat/contacts'),
+        api.get<ApiEnvelope<ChatThread[]>>('/chat/threads'),
+      ]);
+
+      const nextContacts =
+        contactsResult.status === 'fulfilled' ? contactsResult.value.data.data : [];
+      const nextThreads =
+        threadsResult.status === 'fulfilled' ? threadsResult.value.data.data : [];
+      const mergedContacts = combineContacts(nextContacts, nextThreads);
+
+      setContacts(mergedContacts);
+      setThreads(nextThreads);
+
       setSelectedContact((currentContact) => {
-        if (currentContact) {
+        const currentContactId = currentContact?._id;
+
+        if (currentContactId) {
           return (
-            nextContacts.find((contact) => contact._id === currentContact._id) ||
-            nextContacts[0] ||
+            mergedContacts.find((contact) => contact._id === currentContactId) ||
+            nextThreads.find((thread) => thread.partner._id === currentContactId)?.partner ||
+            mergedContacts[0] ||
             null
           );
         }
 
-        return nextContacts[0] || null;
+        if (currentContact) {
+          return (
+            mergedContacts.find((contact) => contact._id === currentContact._id) ||
+            nextThreads[0]?.partner ||
+            mergedContacts[0] ||
+            null
+          );
+        }
+
+        return nextThreads[0]?.partner || mergedContacts[0] || null;
       });
+
+      if (
+        contactsResult.status === 'rejected' &&
+        threadsResult.status === 'rejected'
+      ) {
+        throw contactsResult.reason;
+      }
     } catch (loadError) {
       setError(extractErrorMessage(loadError));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const loadMessages = async (partnerId: string) => {
+  const loadMessages = useCallback(async (partnerId: string) => {
     try {
       setError('');
       const response = await api.get<
@@ -76,17 +148,29 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
     } catch (loadError) {
       setError(extractErrorMessage(loadError));
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadContacts();
-  }, []);
+    syncInbox();
+  }, [syncInbox]);
 
   useEffect(() => {
     if (selectedContact?._id) {
       loadMessages(selectedContact._id);
     }
-  }, [selectedContact?._id]);
+  }, [loadMessages, selectedContact?._id]);
+
+  useEffect(() => {
+    if (!messages.length) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      messageListRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+
+    return () => clearTimeout(timeoutId);
+  }, [messages]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -95,10 +179,34 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
       return;
     }
 
+    const upsertThread = (incomingMessage: ChatMessage) => {
+      const partner =
+        getEntityId(incomingMessage.sender) === user?._id
+          ? incomingMessage.receiver
+          : incomingMessage.sender;
+
+      setThreads((currentThreads) => [
+        {
+          roomKey: incomingMessage.roomKey,
+          partner,
+          lastMessage: incomingMessage,
+        },
+        ...currentThreads.filter((thread) => thread.partner._id !== partner._id),
+      ]);
+
+      setContacts((currentContacts) =>
+        currentContacts.some((contact) => contact._id === partner._id)
+          ? currentContacts
+          : [partner, ...currentContacts],
+      );
+    };
+
     const onNewMessage = (incomingMessage: ChatMessage) => {
       const senderId = getEntityId(incomingMessage.sender);
       const receiverId = getEntityId(incomingMessage.receiver);
       const partnerId = selectedContact?._id;
+
+      upsertThread(incomingMessage);
 
       if (!partnerId || (senderId !== partnerId && receiverId !== partnerId)) {
         return;
@@ -118,7 +226,7 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
     return () => {
       socket.off('chat:new', onNewMessage);
     };
-  }, [selectedContact?._id]);
+  }, [selectedContact?._id, user?._id]);
 
   const sendMessage = async () => {
     if (!selectedContact || !draft.trim()) {
@@ -128,11 +236,24 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
     setSending(true);
 
     try {
+      setError('');
       const response = await api.post<ApiEnvelope<ChatMessage>>(`/chat/${selectedContact._id}`, {
         message: draft.trim(),
       });
 
-      setMessages((currentMessages) => [...currentMessages, response.data.data]);
+      setMessages((currentMessages) =>
+        currentMessages.some((message) => message._id === response.data.data._id)
+          ? currentMessages
+          : [...currentMessages, response.data.data],
+      );
+      setThreads((currentThreads) => [
+        {
+          roomKey: response.data.data.roomKey,
+          partner: selectedContact,
+          lastMessage: response.data.data,
+        },
+        ...currentThreads.filter((thread) => thread.partner._id !== selectedContact._id),
+      ]);
       setDraft('');
     } catch (sendError) {
       setError(extractErrorMessage(sendError));
@@ -141,8 +262,18 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
     }
   };
 
+  const refreshConversation = async () => {
+    setRefreshing(true);
+    await syncInbox();
+
+    if (selectedContact?._id) {
+      await loadMessages(selectedContact._id);
+    }
+  };
+
+  const sendDisabled = !selectedContact || !draft.trim() || sending;
   return (
-    <ScreenLayout title={title} subtitle={subtitle} scroll={false} contentStyle={styles.container}>
+    <ScreenLayout scroll={false} contentStyle={styles.container}>
       {loading ? (
         <EmptyState title="Loading chats" subtitle="Fetching the latest conversation threads." />
       ) : contacts.length === 0 ? (
@@ -153,39 +284,77 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
       ) : (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 92 : 0}
           style={styles.flex}
         >
+          <View style={styles.threadRail}>
+            <View style={styles.storyHeader}>
+              <View>
+                <Text style={styles.storyEyebrow}>Conversations</Text>
+                <Text style={styles.storyTitle}>Open threads</Text>
+              </View>
+              <Pressable onPress={refreshConversation} style={styles.refreshButton}>
+                <AppIcon name="refresh-outline" size={18} color={theme.colors.accent} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={conversationCards}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.storyStrip}
+              keyExtractor={(item) => `story-${item.roomKey}`}
+              renderItem={({ item }) => {
+                const active = item.partner._id === selectedContact?._id;
+
+                return (
+                  <Pressable
+                    onPress={() => setSelectedContact(item.partner)}
+                    style={styles.storyCard}
+                  >
+                    <View style={[styles.storyRing, active ? styles.storyRingActive : null]}>
+                      <View style={styles.storyAvatar}>
+                        <Text style={styles.storyAvatarLabel}>{buildInitials(item.partner.name)}</Text>
+                      </View>
+                    </View>
+                    <Text numberOfLines={1} style={[styles.storyName, active ? styles.storyNameActive : null]}>
+                      {item.partner.name}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.storyMeta}>
+                      {item.partner.role}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+          {error ? (
+            <View style={styles.errorBanner}>
+              <AppIcon name="alert-circle-outline" size={18} color={theme.colors.danger} />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
           <FlatList
-            data={contacts}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.contacts}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => {
-              const active = item._id === selectedContact?._id;
-              return (
-                <Pressable
-                  onPress={() => setSelectedContact(item)}
-                  style={[styles.contactChip, active ? styles.contactChipActive : null]}
-                >
-                  <Text style={styles.contactName}>{item.name}</Text>
-                  <Text style={styles.contactMeta}>{item.role}</Text>
-                </Pressable>
-              );
-            }}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <FlatList
+            ref={messageListRef}
             data={messages}
             keyExtractor={(item) => item._id}
             showsVerticalScrollIndicator={false}
+            style={styles.messageList}
             contentContainerStyle={styles.messages}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshConversation} tintColor={theme.colors.accent} />}
             renderItem={({ item }) => {
               const isOwnMessage = getEntityId(item.sender) === user?._id;
               return (
-                <View style={[styles.messageBubble, isOwnMessage ? styles.messageOwn : styles.messageOther]}>
-                  <Text style={styles.messageText}>{item.message}</Text>
-                  <Text style={styles.messageTime}>{formatDateTime(item.createdAt)}</Text>
+                <View style={[styles.messageRow, isOwnMessage ? styles.messageRowOwn : null]}>
+                  {!isOwnMessage ? (
+                    <View style={styles.messageAvatar}>
+                      <Text style={styles.messageAvatarLabel}>{buildInitials(item.sender.name)}</Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.messageBubble, isOwnMessage ? styles.messageOwn : styles.messageOther]}>
+                    {!isOwnMessage ? <Text style={styles.messageAuthor}>{item.sender.name}</Text> : null}
+                    <Text style={styles.messageText}>{item.message}</Text>
+                    <Text style={styles.messageTime}>{formatDateTime(item.createdAt)}</Text>
+                  </View>
                 </View>
               );
             }}
@@ -196,15 +365,34 @@ export const ChatWorkspace = ({ title, subtitle }: ChatWorkspaceProps) => {
               />
             }
           />
-          <View style={styles.composer}>
-            <TextField
-              label="Message"
-              multiline
-              value={draft}
-              onChangeText={setDraft}
-              style={styles.composerInput}
-            />
-            <PrimaryButton label="Send" onPress={sendMessage} loading={sending} />
+          <View style={styles.composerShell}>
+            <View style={styles.composerInputShell}>
+              <AppIcon name="chatbubble-ellipses-outline" size={18} color={theme.colors.textMuted} />
+              <TextInput
+                multiline
+                placeholder={selectedContact ? `Reply to ${selectedContact.name}` : 'Select a conversation'}
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.composerInput}
+                value={draft}
+                onChangeText={setDraft}
+                textAlignVertical="top"
+              />
+            </View>
+            <Pressable
+              disabled={sendDisabled}
+              onPress={sendMessage}
+              style={({ pressed }) => [
+                styles.sendButton,
+                sendDisabled ? styles.sendButtonDisabled : null,
+                pressed && !sendDisabled ? styles.sendButtonPressed : null,
+              ]}
+            >
+              {sending ? (
+                <ActivityIndicator color={theme.colors.textOnAccent} />
+              ) : (
+                <AppIcon name="arrow-up-outline" size={20} color={theme.colors.textOnAccent} />
+              )}
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       )}
@@ -216,48 +404,144 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      paddingTop: theme.spacing.xs,
       paddingBottom: theme.spacing.md,
     },
     flex: {
       flex: 1,
-      gap: theme.spacing.md,
+      gap: theme.spacing.sm,
     },
-    contacts: {
-      flexGrow: 0,
+    threadRail: {
+      gap: theme.spacing.sm,
     },
-    contactChip: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderRadius: 18,
-      borderWidth: 1,
-      marginRight: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+    storyHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
     },
-    contactChipActive: {
-      borderColor: theme.colors.accent,
-      backgroundColor: theme.colors.surfaceMuted,
-    },
-    contactName: {
-      color: theme.colors.text,
-      fontFamily: theme.fontFamily.heading,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    contactMeta: {
+    storyEyebrow: {
       color: theme.colors.textMuted,
       fontSize: 11,
-      marginTop: 4,
+      letterSpacing: 0.8,
+      marginBottom: 2,
       textTransform: 'uppercase',
+    },
+    storyTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    storyStrip: {
+      gap: theme.spacing.sm,
+      paddingRight: theme.spacing.sm,
+      paddingVertical: 2,
+    },
+    storyCard: {
+      alignItems: 'center',
+      width: 68,
+    },
+    storyRing: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderColor: theme.colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 62,
+      justifyContent: 'center',
+      marginBottom: 6,
+      width: 62,
+    },
+    storyRingActive: {
+      borderColor: theme.colors.accent,
+      borderWidth: 2,
+      shadowColor: theme.colors.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+    },
+    storyAvatar: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.accentMuted,
+      borderRadius: 999,
+      height: 50,
+      justifyContent: 'center',
+      width: 50,
+    },
+    storyAvatarLabel: {
+      color: theme.colors.accent,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    storyName: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 13,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    storyNameActive: {
+      color: theme.colors.accent,
+    },
+    storyMeta: {
+      color: theme.colors.textMuted,
+      fontSize: 10,
+      textTransform: 'uppercase',
+    },
+    refreshButton: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderRadius: 16,
+      height: 34,
+      justifyContent: 'center',
+      width: 34,
+    },
+    errorBanner: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderColor: theme.colors.danger,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
     },
     messages: {
       flexGrow: 1,
       gap: 10,
       paddingBottom: theme.spacing.md,
+      paddingTop: 2,
+    },
+    messageList: {
+      flex: 1,
+    },
+    messageRow: {
+      alignItems: 'flex-end',
+      flexDirection: 'row',
+      gap: 10,
+    },
+    messageRowOwn: {
+      justifyContent: 'flex-end',
+    },
+    messageAvatar: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderRadius: 16,
+      height: 32,
+      justifyContent: 'center',
+      width: 32,
+    },
+    messageAvatarLabel: {
+      color: theme.colors.textMuted,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 11,
+      fontWeight: '700',
     },
     messageBubble: {
       alignSelf: 'flex-start',
-      borderRadius: theme.radius.md,
+      borderRadius: 20,
       maxWidth: '84%',
       paddingHorizontal: 14,
       paddingVertical: 12,
@@ -265,11 +549,22 @@ const createStyles = (theme: AppTheme) =>
     messageOwn: {
       alignSelf: 'flex-end',
       backgroundColor: theme.colors.accentMuted,
+      borderBottomRightRadius: 8,
     },
     messageOther: {
       backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
+      borderBottomLeftRadius: 8,
       borderWidth: 1,
+    },
+    messageAuthor: {
+      color: theme.colors.textMuted,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.4,
+      marginBottom: 6,
+      textTransform: 'uppercase',
     },
     messageText: {
       color: theme.colors.text,
@@ -280,14 +575,48 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 11,
       marginTop: 8,
     },
-    composer: {
+    composerShell: {
+      alignItems: 'flex-end',
+      flexDirection: 'row',
       gap: theme.spacing.sm,
     },
+    composerInputShell: {
+      alignItems: 'flex-start',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: 'row',
+      gap: 10,
+      minHeight: 64,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 12,
+    },
     composerInput: {
-      minHeight: 90,
-      textAlignVertical: 'top',
+      color: theme.colors.text,
+      flex: 1,
+      fontFamily: theme.fontFamily.body,
+      maxHeight: 110,
+      minHeight: 40,
+      padding: 0,
+    },
+    sendButton: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.accent,
+      borderRadius: 18,
+      height: 52,
+      justifyContent: 'center',
+      width: 52,
+    },
+    sendButtonDisabled: {
+      opacity: 0.45,
+    },
+    sendButtonPressed: {
+      opacity: 0.85,
     },
     error: {
       color: theme.colors.danger,
+      flex: 1,
     },
   });

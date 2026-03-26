@@ -84,6 +84,7 @@ const initSocket = (httpServer) => {
 
       const roomKey = buildChatRoom(userId, receiver._id);
       const savedMessage = await ChatMessage.create({
+        organizationId: socket.user.organizationId,
         roomKey,
         sender: socket.user._id,
         receiver: receiver._id,

@@ -20,6 +20,29 @@ export const formatDateTime = (value?: string) => {
   });
 };
 
+export const formatDate = (value?: string | Date) => {
+  if (!value) {
+    return 'Today';
+  }
+
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+export const formatTime = (value?: string | Date | null) => {
+  if (!value) {
+    return 'Pending';
+  }
+
+  return new Date(value).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 export const humanizeStatus = (status: OrderStatus) =>
   status.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 

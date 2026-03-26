@@ -29,6 +29,7 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
 
   return (
     <ScreenLayout
+      flushTop={false}
       title="Loka"
       subtitle="Realtime dispatch, live driver visibility, and order control for modern logistics teams."
       rightAction={<ThemeToggleButton />}
@@ -69,6 +70,9 @@ const LoginScreen = ({ navigation }: { navigation: any }) => {
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton label="Login" onPress={handleLogin} loading={loggingIn} />
+        <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+          <Text style={[styles.ctaLink, { color: theme.colors.accent }]}>Forgot password?</Text>
+        </Pressable>
       </View>
 
       <View style={styles.ctaGrid}>

@@ -2,8 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { EmptyState } from '../../components/EmptyState';
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
-import { getCurrentLocation, requestLocationPermission } from '../../services/location';
+import {
+  getCurrentLocation,
+  getLocationDetails,
+  LocationDetails,
+  openInExternalMap,
+  requestLocationPermission,
+} from '../../services/location';
 import { getSocket } from '../../services/socket';
 import { useAuth } from '../../store/AuthContext';
 import { LocationPoint, Order } from '../../types';
@@ -25,6 +32,8 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
   const styles = useThemedStyles(createStyles);
   const order: Order | undefined = route.params?.order;
   const [currentLocation, setCurrentLocation] = useState<LocationPoint | null>(null);
+  const [currentLocationDetails, setCurrentLocationDetails] = useState<LocationDetails | null>(null);
+  const [destinationDetails, setDestinationDetails] = useState<LocationDetails | null>(null);
   const [error, setError] = useState('');
 
   const loadCurrentLocation = async () => {
@@ -39,6 +48,8 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
 
       const nextLocation = await getCurrentLocation();
       setCurrentLocation(nextLocation);
+      const details = await getLocationDetails(nextLocation, 'Your live route');
+      setCurrentLocationDetails(details);
     } catch (locationError) {
       setError(extractErrorMessage(locationError));
     }
@@ -57,10 +68,14 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
 
     const onGpsUpdated = (payload: any) => {
       if (payload.workerId === user?._id) {
-        setCurrentLocation({
+        const nextLocation = {
           latitude: payload.latitude,
           longitude: payload.longitude,
-        });
+        };
+        setCurrentLocation(nextLocation);
+        getLocationDetails(nextLocation, 'Your live route')
+          .then(setCurrentLocationDetails)
+          .catch(() => null);
       }
     };
 
@@ -70,6 +85,17 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
       socket.off('gps:updated', onGpsUpdated);
     };
   }, [user?._id]);
+
+  useEffect(() => {
+    if (!order?.deliveryLocation) {
+      setDestinationDetails(null);
+      return;
+    }
+
+    getLocationDetails(order.deliveryLocation, 'Delivery point')
+      .then(setDestinationDetails)
+      .catch(() => null);
+  }, [order?.deliveryLocation]);
 
   const initialRegion =
     currentLocation || order?.deliveryLocation
@@ -102,7 +128,31 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
       {order ? (
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Destination</Text>
-          <Text style={styles.infoMeta}>{order.deliveryAddress || 'Address not provided for this order.'}</Text>
+          <Text style={styles.infoMeta}>
+            {order.deliveryAddress || destinationDetails?.title || 'Address not provided for this order.'}
+          </Text>
+          {destinationDetails?.subtitle ? (
+            <Text style={styles.infoMeta}>{destinationDetails.subtitle}</Text>
+          ) : null}
+          {currentLocationDetails ? (
+            <View style={styles.routeSummary}>
+              <Text style={styles.routeTitle}>Live worker location</Text>
+              <Text style={styles.infoMeta}>{currentLocationDetails.title}</Text>
+              <Text style={styles.infoMeta}>{currentLocationDetails.subtitle}</Text>
+            </View>
+          ) : null}
+          {order.deliveryLocation ? (
+            <PrimaryButton
+              label="Open in Maps"
+              variant="outline"
+              onPress={() =>
+                openInExternalMap(
+                  order.deliveryLocation as LocationPoint,
+                  order.deliveryAddress || destinationDetails?.title || 'Delivery point',
+                )
+              }
+            />
+          ) : null}
         </View>
       ) : (
         <EmptyState
@@ -145,6 +195,19 @@ const createStyles = (theme: AppTheme) =>
     },
     infoMeta: {
       color: theme.colors.textMuted,
+    },
+    routeSummary: {
+      borderTopColor: theme.colors.border,
+      borderTopWidth: 1,
+      gap: 4,
+      marginTop: theme.spacing.xs,
+      paddingTop: theme.spacing.sm,
+    },
+    routeTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 14,
+      fontWeight: '700',
     },
   });
 

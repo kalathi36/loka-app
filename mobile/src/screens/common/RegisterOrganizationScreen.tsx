@@ -34,6 +34,7 @@ const RegisterOrganizationScreen = ({ navigation }: { navigation: any }) => {
 
   return (
     <ScreenLayout
+      flushTop={false}
       title="Register Organization"
       subtitle="Launch a new operations workspace and create the first admin account."
       rightAction={<ThemeToggleButton />}

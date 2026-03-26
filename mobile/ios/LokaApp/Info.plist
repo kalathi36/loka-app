@@ -39,6 +39,10 @@
 	<string>Loka uses your location for live tracking, attendance, and delivery navigation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Loka uses your photo library to attach delivery proof images.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Ionicons.ttf</string>
+	</array>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

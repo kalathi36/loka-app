@@ -1,5 +1,7 @@
 import React from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleProp,
@@ -20,6 +22,7 @@ interface ScreenLayoutProps {
   scroll?: boolean;
   rightAction?: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  flushTop?: boolean;
 }
 
 export const ScreenLayout = ({
@@ -29,13 +32,14 @@ export const ScreenLayout = ({
   scroll = true,
   rightAction,
   contentStyle,
+  flushTop = true,
 }: ScreenLayoutProps) => {
   const { theme } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const content = (
     <View style={[styles.content, contentStyle]}>
       {title || rightAction ? (
-        <View style={styles.header}>
+        <View style={[styles.header, flushTop ? styles.headerFlushTop : null]}>
           <View style={styles.headerText}>
             {title ? <Text style={styles.title}>{title}</Text> : null}
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -48,20 +52,33 @@ export const ScreenLayout = ({
   );
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView edges={flushTop ? [] : ['top']} style={styles.safeArea}>
       <StatusBar
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
         backgroundColor={theme.colors.background}
       />
       <View style={styles.glowA} />
       <View style={styles.glowB} />
-      {scroll ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {content}
-        </ScrollView>
-      ) : (
-        content
-      )}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={8}
+        style={styles.flex}
+      >
+        {scroll ? (
+          <ScrollView
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
+            contentContainerStyle={styles.scrollContent}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {content}
+          </ScrollView>
+        ) : (
+          content
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -70,6 +87,9 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     safeArea: {
       backgroundColor: theme.colors.background,
+      flex: 1,
+    },
+    flex: {
       flex: 1,
     },
     scrollContent: {
@@ -103,7 +123,10 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'flex-start',
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginTop: theme.spacing.md,
+      marginTop: theme.spacing.xs,
+    },
+    headerFlushTop: {
+      marginTop: 0,
     },
     headerText: {
       flex: 1,

@@ -28,9 +28,16 @@ export const OrderCard = ({ order, onPress, actionLabel, onActionPress }: OrderC
           </View>
           <StatusChip status={order.status} />
         </View>
-        <Text style={styles.line}>
-          {order.items.length} item(s) • {formatCurrency(order.totalAmount)}
-        </Text>
+        <View style={styles.metricsRow}>
+          <View style={styles.metricChip}>
+            <Text style={styles.metricLabel}>Items</Text>
+            <Text style={styles.metricValue}>{order.items.length}</Text>
+          </View>
+          <View style={styles.metricChip}>
+            <Text style={styles.metricLabel}>Value</Text>
+            <Text style={styles.metricValue}>{formatCurrency(order.totalAmount)}</Text>
+          </View>
+        </View>
         <Text style={styles.line}>Worker: {getEntityName(order.assignedWorker)}</Text>
         <Text style={styles.line}>Address: {order.deliveryAddress || 'Customer will confirm on call'}</Text>
         {actionLabel && onActionPress ? (
@@ -45,6 +52,7 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     card: {
       gap: 10,
+      backgroundColor: theme.colors.surfaceRaised,
     },
     header: {
       alignItems: 'flex-start',
@@ -65,6 +73,31 @@ const createStyles = (theme: AppTheme) =>
     line: {
       color: theme.colors.textMuted,
       lineHeight: 20,
+    },
+    metricsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    metricChip: {
+      backgroundColor: theme.colors.surfaceMuted,
+      borderColor: theme.colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      flex: 1,
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    metricLabel: {
+      color: theme.colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    metricValue: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontWeight: '700',
     },
     action: {
       marginTop: 6,

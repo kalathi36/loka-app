@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@react-native-community/geolocation": "^3.4.0",
+    "@react-navigation/bottom-tabs": "^6.6.1",
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/stack": "^6.4.1",
     "axios": "^1.7.9",
@@ -22,6 +23,7 @@
     "react-native-maps": "^1.18.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-screens": "^4.4.0",
+    "react-native-vector-icons": "^10.3.0",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {

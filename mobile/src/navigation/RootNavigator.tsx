@@ -8,6 +8,7 @@ import LoginScreen from '../screens/common/LoginScreen';
 import RegisterOrganizationScreen from '../screens/common/RegisterOrganizationScreen';
 import SignupScreen from '../screens/common/SignupScreen';
 import SplashScreen from '../screens/common/SplashScreen';
+import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
 import { useAuth } from '../store/AuthContext';
 import { useAppTheme } from '../theme/ThemeProvider';
 
@@ -40,6 +41,7 @@ const RootNavigator = () => {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Signup" component={SignupScreen} />
           <Stack.Screen name="RegisterOrganization" component={RegisterOrganizationScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         </Stack.Navigator>
       ) : user.role === 'admin' ? (
         <AdminStack />

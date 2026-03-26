@@ -2,42 +2,102 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import CartScreen from '../screens/customer/CartScreen';
 import ChatScreen from '../screens/customer/ChatScreen';
+import CustomerManageScreen from '../screens/customer/CustomerManageScreen';
+import CustomerOrdersScreen from '../screens/customer/CustomerOrdersScreen';
 import OrderScreen from '../screens/customer/OrderScreen';
 import OrderTrackingScreen from '../screens/customer/OrderTrackingScreen';
 import ProductListScreen from '../screens/customer/ProductListScreen';
-import { ThemeToggleButton } from '../components/ThemeToggleButton';
+import EditProfileScreen from '../screens/common/EditProfileScreen';
+import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
+import ProfileScreen from '../screens/common/ProfileScreen';
+import {
+  buildStackScreenOptions,
+  buildTabScreenOptions,
+  createRoleTabNavigator,
+  renderTabGlyph,
+} from './navigationStyles';
 import { useAppTheme } from '../theme/ThemeProvider';
 
-const Stack = createStackNavigator();
-const renderThemeToggle = () => <ThemeToggleButton compact />;
+const Tab = createRoleTabNavigator();
+const HomeStack = createStackNavigator();
+const ManageStack = createStackNavigator();
+const ProfileStack = createStackNavigator();
+
+const CustomerHomeStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <HomeStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <HomeStack.Screen name="Products" component={ProductListScreen} options={{ title: 'Loka Shop' }} />
+    </HomeStack.Navigator>
+  );
+};
+
+const CustomerManageStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <ManageStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <ManageStack.Screen name="CustomerManage" component={CustomerManageScreen} options={{ title: 'Manage' }} />
+      <ManageStack.Screen name="Cart" component={CartScreen} options={{ title: 'Cart' }} />
+      <ManageStack.Screen name="CustomerOrders" component={CustomerOrdersScreen} options={{ title: 'Orders' }} />
+      <ManageStack.Screen name="Order" component={OrderScreen} options={{ title: 'Checkout' }} />
+      <ManageStack.Screen
+        name="OrderTracking"
+        component={OrderTrackingScreen}
+        options={{ title: 'Track Orders' }}
+      />
+      <ManageStack.Screen name="Chat" component={ChatScreen} options={{ title: 'Support Chat' }} />
+    </ManageStack.Navigator>
+  );
+};
+
+const CustomerProfileStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <ProfileStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <ProfileStack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
+      <ProfileStack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{ title: 'Forgot Password' }}
+      />
+    </ProfileStack.Navigator>
+  );
+};
 
 const CustomerStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        cardStyle: { backgroundColor: theme.colors.background },
-        headerStyle: { backgroundColor: theme.colors.background },
-        headerTintColor: theme.colors.text,
-        headerTitleStyle: {
-          color: theme.colors.text,
-          fontFamily: theme.fontFamily.heading,
-        },
-        headerRight: renderThemeToggle,
-        headerRightContainerStyle: { paddingRight: 12 },
-      }}
-    >
-      <Stack.Screen name="Products" component={ProductListScreen} options={{ title: 'Loka Shop' }} />
-      <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Cart' }} />
-      <Stack.Screen name="Order" component={OrderScreen} options={{ title: 'Checkout' }} />
-      <Stack.Screen
-        name="OrderTracking"
-        component={OrderTrackingScreen}
-        options={{ title: 'Track Orders' }}
+    <Tab.Navigator screenOptions={buildTabScreenOptions(theme)}>
+      <Tab.Screen
+        name="CustomerHomeTab"
+        component={CustomerHomeStack}
+        options={{
+          title: 'Home',
+          ...renderTabGlyph('storefront-outline'),
+        }}
       />
-      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Support Chat' }} />
-    </Stack.Navigator>
+      <Tab.Screen
+        name="CustomerManageTab"
+        component={CustomerManageStack}
+        options={{
+          title: 'Manage',
+          ...renderTabGlyph('bag-handle-outline'),
+        }}
+      />
+      <Tab.Screen
+        name="CustomerProfileTab"
+        component={CustomerProfileStack}
+        options={{
+          title: 'Profile',
+          ...renderTabGlyph('person-circle-outline'),
+        }}
+      />
+    </Tab.Navigator>
   );
 };
 

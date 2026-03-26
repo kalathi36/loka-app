@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { showToast } from '../services/toast';
 import { CartItem, Product } from '../types';
 
 interface CartContextValue {
@@ -27,6 +28,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
       return [...currentItems, { ...product, quantity: 1 }];
     });
+
+    showToast({
+      type: 'success',
+      title: 'Added to cart',
+      message: product.name,
+    });
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -39,6 +46,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   const removeFromCart = (productId: string) => {
     setItems((currentItems) => currentItems.filter((item) => item._id !== productId));
+
+    showToast({
+      type: 'info',
+      title: 'Removed from cart',
+      message: 'Cart updated successfully.',
+    });
   };
 
   const clearCart = () => {

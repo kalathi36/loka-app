@@ -1,23 +1,43 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { EmptyState } from '../../components/EmptyState';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
-import api from '../../services/api';
-import { getCurrentLocation, requestLocationPermission } from '../../services/location';
-import { LocationPoint } from '../../types';
+import api, { getApiErrorStatus } from '../../services/api';
+import {
+  getCurrentLocation,
+  getLocationDetails,
+  LocationDetails,
+  requestLocationPermission,
+} from '../../services/location';
+import { showToast } from '../../services/toast';
+import { useAuth } from '../../store/AuthContext';
+import { ApiEnvelope, LocationPoint } from '../../types';
 import { AppTheme } from '../../theme/theme';
 import { useThemedStyles } from '../../theme/useThemedStyles';
-import { extractErrorMessage } from '../../utils/formatters';
+import { extractErrorMessage, formatDate, formatTime } from '../../utils/formatters';
+
+interface AttendanceWorkerResponse {
+  records: Array<{
+    _id: string;
+    date: string;
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    dailyWage: number;
+  }>;
+}
 
 const AttendanceScreen = () => {
+  const { user } = useAuth();
   const styles = useThemedStyles(createStyles);
   const [location, setLocation] = useState<LocationPoint | null>(null);
-  const [statusText, setStatusText] = useState('');
+  const [locationDetails, setLocationDetails] = useState<LocationDetails | null>(null);
+  const [todayRecord, setTodayRecord] = useState<AttendanceWorkerResponse['records'][number] | null>(null);
+  const [history, setHistory] = useState<AttendanceWorkerResponse['records']>([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const loadLocation = async () => {
+  const loadLocation = useCallback(async () => {
     try {
       setError('');
       const granted = await requestLocationPermission();
@@ -29,16 +49,43 @@ const AttendanceScreen = () => {
 
       const nextLocation = await getCurrentLocation();
       setLocation(nextLocation);
+      const details = await getLocationDetails(nextLocation, 'Current site');
+      setLocationDetails(details);
     } catch (locationError) {
       setError(extractErrorMessage(locationError));
     }
-  };
+  }, []);
+
+  const loadAttendanceHistory = useCallback(async () => {
+    try {
+      const response = await api.get<ApiEnvelope<AttendanceWorkerResponse>>(
+        `/attendance/worker/${user?._id}`,
+      );
+      const today = formatDate(new Date());
+      setHistory(response.data.data.records);
+      setTodayRecord(
+        response.data.data.records.find(
+          (record: AttendanceWorkerResponse['records'][number]) => formatDate(record.date) === today,
+        ) || null,
+      );
+    } catch (attendanceError) {
+      if (getApiErrorStatus(attendanceError) === 404) {
+        setHistory([]);
+        setTodayRecord(null);
+        setError('Attendance history is unavailable until the latest backend is deployed.');
+        return;
+      }
+
+      setError(extractErrorMessage(attendanceError));
+    }
+  }, [user?._id]);
 
   useEffect(() => {
     loadLocation();
-  }, []);
+    loadAttendanceHistory();
+  }, [loadAttendanceHistory, loadLocation]);
 
-  const markAttendance = async () => {
+  const handleAttendance = async (type: 'checkin' | 'checkout') => {
     if (!location) {
       setError('Fetch your location before checking in.');
       return;
@@ -48,9 +95,25 @@ const AttendanceScreen = () => {
 
     try {
       setError('');
-      await api.post('/workers/attendance', location);
-      setStatusText('Attendance captured successfully.');
+      await api.post(`/attendance/${type}`, location);
+      showToast({
+        type: 'success',
+        title: type === 'checkin' ? 'Checked in' : 'Checked out',
+        message: 'Attendance was recorded successfully.',
+      });
+      await loadAttendanceHistory();
     } catch (attendanceError) {
+      if (type === 'checkin' && getApiErrorStatus(attendanceError) === 404) {
+        await api.post('/workers/attendance', location);
+        showToast({
+          type: 'success',
+          title: 'Checked in',
+          message: 'Attendance was recorded using the legacy worker endpoint.',
+        });
+        await loadAttendanceHistory();
+        return;
+      }
+
       setError(extractErrorMessage(attendanceError));
     } finally {
       setSubmitting(false);
@@ -59,26 +122,62 @@ const AttendanceScreen = () => {
 
   return (
     <ScreenLayout title="Attendance" subtitle="Check in from the field with a verified GPS pin.">
-      {location ? (
-        <View style={styles.locationCard}>
-          <Text style={styles.label}>Current Coordinates</Text>
-          <Text style={styles.value}>
-            {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
+      {todayRecord ? (
+        <View style={styles.statusCard}>
+          <Text style={styles.label}>Today</Text>
+          <Text style={styles.value}>{formatDate(todayRecord.date)}</Text>
+          <Text style={styles.statusText}>
+            In {formatTime(todayRecord.checkInTime)} • Out {formatTime(todayRecord.checkOutTime)}
           </Text>
         </View>
+      ) : null}
+      {location ? (
+        <View style={styles.locationCard}>
+          <Text style={styles.label}>Current location</Text>
+          <Text style={styles.value}>{locationDetails?.title || 'Fetching place details...'}</Text>
+          <Text style={styles.statusText}>{locationDetails?.subtitle || 'Live coordinates captured for attendance.'}</Text>
+          <Text style={styles.locationMeta}>{locationDetails?.coordinates || ''}</Text>
+        </View>
       ) : (
-        <EmptyState title="Location not ready" subtitle="Use refresh to request location access and fetch your coordinates." />
+        <EmptyState title="Location not ready" subtitle="Use refresh to request location access and fetch your live site." />
       )}
-      {statusText ? <Text style={styles.success}>{statusText}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <PrimaryButton label="Refresh Location" variant="outline" onPress={loadLocation} />
-      <PrimaryButton label="Mark Attendance" onPress={markAttendance} loading={submitting} />
+      <PrimaryButton
+        label={todayRecord?.checkInTime ? 'Already Checked In' : 'Check In'}
+        onPress={() => handleAttendance('checkin')}
+        loading={submitting}
+        disabled={Boolean(todayRecord?.checkInTime)}
+      />
+      <PrimaryButton
+        label={todayRecord?.checkOutTime ? 'Already Checked Out' : 'Check Out'}
+        variant="ghost"
+        onPress={() => handleAttendance('checkout')}
+        loading={submitting}
+        disabled={!todayRecord?.checkInTime || Boolean(todayRecord?.checkOutTime)}
+      />
+      {history.slice(0, 5).map((record) => (
+        <View key={record._id} style={styles.historyCard}>
+          <Text style={styles.historyTitle}>{formatDate(record.date)}</Text>
+          <Text style={styles.historyMeta}>
+            In {formatTime(record.checkInTime)} • Out {formatTime(record.checkOutTime)}
+          </Text>
+        </View>
+      ))}
     </ScreenLayout>
   );
 };
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
+    statusCard: {
+      backgroundColor: theme.colors.surfaceRaised,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      gap: 8,
+      padding: theme.spacing.md,
+    },
     locationCard: {
       backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
@@ -97,11 +196,31 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 20,
       fontWeight: '700',
     },
-    success: {
-      color: theme.colors.success,
+    statusText: {
+      color: theme.colors.textMuted,
+    },
+    locationMeta: {
+      color: theme.colors.textMuted,
+      fontSize: 12,
     },
     error: {
       color: theme.colors.danger,
+    },
+    historyCard: {
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      gap: 4,
+      padding: theme.spacing.md,
+    },
+    historyTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontWeight: '700',
+    },
+    historyMeta: {
+      color: theme.colors.textMuted,
     },
   });
 

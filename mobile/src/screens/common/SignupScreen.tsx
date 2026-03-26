@@ -43,6 +43,7 @@ const SignupScreen = ({ navigation }: { navigation: any }) => {
 
   return (
     <ScreenLayout
+      flushTop={false}
       title="Join Organization"
       subtitle="Create a new user account for an existing Loka workspace."
       rightAction={<ThemeToggleButton />}
