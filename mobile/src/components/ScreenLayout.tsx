@@ -1,0 +1,124 @@
+import React from 'react';
+import {
+  ScrollView,
+  StatusBar,
+  StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  ViewStyle,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppTheme } from '../theme/ThemeProvider';
+import { AppTheme } from '../theme/theme';
+import { useThemedStyles } from '../theme/useThemedStyles';
+
+interface ScreenLayoutProps {
+  title?: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  scroll?: boolean;
+  rightAction?: React.ReactNode;
+  contentStyle?: StyleProp<ViewStyle>;
+}
+
+export const ScreenLayout = ({
+  title,
+  subtitle,
+  children,
+  scroll = true,
+  rightAction,
+  contentStyle,
+}: ScreenLayoutProps) => {
+  const { theme } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const content = (
+    <View style={[styles.content, contentStyle]}>
+      {title || rightAction ? (
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            {title ? <Text style={styles.title}>{title}</Text> : null}
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          </View>
+          {rightAction}
+        </View>
+      ) : null}
+      {children}
+    </View>
+  );
+
+  return (
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <StatusBar
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.colors.background}
+      />
+      <View style={styles.glowA} />
+      <View style={styles.glowB} />
+      {scroll ? (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {content}
+        </ScrollView>
+      ) : (
+        content
+      )}
+    </SafeAreaView>
+  );
+};
+
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    safeArea: {
+      backgroundColor: theme.colors.background,
+      flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
+    },
+    content: {
+      flex: 1,
+      gap: theme.spacing.md,
+      paddingBottom: theme.spacing.xl,
+      paddingHorizontal: theme.spacing.md,
+    },
+    glowA: {
+      backgroundColor: theme.colors.glowPrimary,
+      borderRadius: 180,
+      height: 220,
+      position: 'absolute',
+      right: -60,
+      top: -40,
+      width: 220,
+    },
+    glowB: {
+      backgroundColor: theme.colors.glowSecondary,
+      borderRadius: 180,
+      bottom: 40,
+      height: 180,
+      left: -90,
+      position: 'absolute',
+      width: 180,
+    },
+    header: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: theme.spacing.md,
+    },
+    headerText: {
+      flex: 1,
+      gap: 8,
+      paddingRight: theme.spacing.md,
+    },
+    title: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 28,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+    },
+    subtitle: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
+    },
+  });
