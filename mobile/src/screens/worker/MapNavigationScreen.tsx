@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { StyleSheet, Text, View } from 'react-native';
+import { Marker } from 'react-native-maps';
+import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { MapPanel } from '../../components/MapPanel';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
 import {
@@ -35,8 +37,11 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
   const [currentLocationDetails, setCurrentLocationDetails] = useState<LocationDetails | null>(null);
   const [destinationDetails, setDestinationDetails] = useState<LocationDetails | null>(null);
   const [error, setError] = useState('');
+  const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
 
   const loadCurrentLocation = async () => {
+    setIsRefreshingLocation(true);
+
     try {
       setError('');
       const granted = await requestLocationPermission();
@@ -52,6 +57,8 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
       setCurrentLocationDetails(details);
     } catch (locationError) {
       setError(extractErrorMessage(locationError));
+    } finally {
+      setIsRefreshingLocation(false);
     }
   };
 
@@ -107,37 +114,47 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
           longitudeDelta: 0.08,
         }
       : fallbackRegion;
+  const routePoints = [
+    ...(currentLocation ? [currentLocation] : []),
+    ...(order?.deliveryLocation ? [order.deliveryLocation] : []),
+  ];
 
   return (
     <ScreenLayout title="Navigation Map" subtitle="Follow your current GPS pin and the customer drop point in one map view.">
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {Platform.OS === 'android' && __DEV__ ? (
-        <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>Android map tiles</Text>
-          <Text style={styles.noticeText}>
-            If this panel is blank, rebuild Android with a valid `MAPS_API_KEY`. You can still
-            open the drop point in your phone maps below.
-          </Text>
-        </View>
-      ) : null}
-      <View style={styles.mapShell}>
-        <MapView
-          liteMode={Platform.OS === 'android'}
-          loadingEnabled
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-          style={styles.map}
-          initialRegion={initialRegion}
-        >
+      <MapPanel
+        fallbackActionLabel={order?.deliveryLocation ? 'Open destination' : undefined}
+        fallbackDescription="You can still keep the delivery moving by opening the destination in your phone maps."
+        fallbackTitle="Route map is loading slowly."
+        initialRegion={initialRegion}
+        onFallbackAction={
+          order?.deliveryLocation
+            ? () =>
+                openInExternalMap(
+                  order.deliveryLocation as LocationPoint,
+                  order.deliveryAddress || destinationDetails?.title || 'Delivery point',
+                )
+            : undefined
+        }
+        points={routePoints}
+        statusLabel={currentLocation ? 'GPS live' : 'GPS pending'}
+        statusTone={currentLocation ? 'accent' : 'warning'}
+        subtitle={
+          currentLocation
+            ? 'Your live GPS route and the customer stop stay centered as the trip updates.'
+            : 'Grant location access to start live navigation and keep delivery updates accurate.'
+        }
+        title="Live delivery route"
+      >
           {currentLocation ? (
             <Marker coordinate={currentLocation} title="Your Location" pinColor={theme.colors.accentSecondary} />
           ) : null}
           {order?.deliveryLocation ? (
             <Marker coordinate={order.deliveryLocation} title="Delivery Point" pinColor={theme.colors.accent} />
           ) : null}
-        </MapView>
-      </View>
+      </MapPanel>
       {order ? (
-        <View style={styles.infoCard}>
+        <Card style={styles.infoCard}>
           <Text style={styles.infoTitle}>Destination</Text>
           <Text style={styles.infoMeta}>
             {order.deliveryAddress || destinationDetails?.title || 'Address not provided for this order.'}
@@ -150,6 +167,7 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
               <Text style={styles.routeTitle}>Live worker location</Text>
               <Text style={styles.infoMeta}>{currentLocationDetails.title}</Text>
               <Text style={styles.infoMeta}>{currentLocationDetails.subtitle}</Text>
+              <Text style={styles.infoMeta}>{currentLocationDetails.coordinates}</Text>
             </View>
           ) : null}
           {order.deliveryLocation ? (
@@ -164,7 +182,15 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
               }
             />
           ) : null}
-        </View>
+          <PrimaryButton
+            label="Refresh GPS"
+            loading={isRefreshingLocation}
+            onPress={() => {
+              loadCurrentLocation().catch(() => null);
+            }}
+            variant="ghost"
+          />
+        </Card>
       ) : (
         <EmptyState
           title="No order selected"
@@ -180,41 +206,8 @@ const createStyles = (theme: AppTheme) =>
     error: {
       color: theme.colors.danger,
     },
-    mapShell: {
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      overflow: 'hidden',
-    },
-    map: {
-      height: 340,
-      width: '100%',
-    },
     infoCard: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
       gap: 8,
-      padding: theme.spacing.md,
-    },
-    noticeCard: {
-      backgroundColor: theme.colors.surfaceMuted,
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      gap: 6,
-      padding: theme.spacing.md,
-    },
-    noticeTitle: {
-      color: theme.colors.text,
-      fontFamily: theme.fontFamily.heading,
-      fontSize: 15,
-      fontWeight: '700',
-    },
-    noticeText: {
-      color: theme.colors.textMuted,
-      lineHeight: 20,
     },
     infoTitle: {
       color: theme.colors.text,

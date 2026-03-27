@@ -10,16 +10,16 @@ export const ThemeToggleButton = ({ compact = false }: { compact?: boolean }) =>
   const styles = useThemedStyles(createStyles);
 
   return (
-    <Pressable onPress={toggleTheme} style={styles.button}>
+    <Pressable onPress={toggleTheme} style={[styles.button, compact ? styles.buttonCompact : null]}>
       <View style={styles.content}>
         <AppIcon
           name={isDark ? 'sunny-outline' : 'moon-outline'}
           size={compact ? 14 : 16}
           color={theme.colors.text}
         />
-        <Text style={styles.label}>
-          {compact ? (isDark ? 'LIGHT' : 'DARK') : isDark ? 'Switch to Light' : 'Switch to Dark'}
-        </Text>
+        {compact ? null : (
+          <Text style={styles.label}>{isDark ? 'Switch to Light' : 'Switch to Dark'}</Text>
+        )}
       </View>
     </Pressable>
   );
@@ -40,6 +40,11 @@ const createStyles = (theme: AppTheme) =>
       shadowOpacity: theme.isDark ? 0.16 : 0.08,
       shadowRadius: 12,
       shadowOffset: { width: 0, height: 6 },
+    },
+    buttonCompact: {
+      minHeight: 34,
+      minWidth: 34,
+      paddingHorizontal: 0,
     },
     content: {
       alignItems: 'center',

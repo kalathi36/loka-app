@@ -1,7 +1,11 @@
 import Clipboard from '@react-native-clipboard/clipboard';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '../../components/AppIcon';
+import { LoadingOverlay } from '../../components/LoadingOverlay';
+import { OrderCard } from '../../components/OrderCard';
+import { ScreenLayout } from '../../components/ScreenLayout';
+import { StatCard } from '../../components/StatCard';
 import api, { getApiErrorStatus } from '../../services/api';
 import { showToast } from '../../services/toast';
 import { useAuth } from '../../store/AuthContext';
@@ -10,10 +14,6 @@ import { AppTheme } from '../../theme/theme';
 import { useAppTheme } from '../../theme/ThemeProvider';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { extractErrorMessage, formatCurrency } from '../../utils/formatters';
-import { LoadingOverlay } from '../../components/LoadingOverlay';
-import { OrderCard } from '../../components/OrderCard';
-import { ScreenLayout } from '../../components/ScreenLayout';
-import { StatCard } from '../../components/StatCard';
 
 const createEmptyOrdersByStatus = () => ({
   pending: 0,
@@ -105,30 +105,39 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
     return unsubscribe;
   }, [loadDashboard, navigation]);
 
+  const pendingCount = dashboard?.ordersByStatus.pending || 0;
+  const approvedCount = dashboard?.ordersByStatus.approved || 0;
+  const liveCount = dashboard?.ordersByStatus.out_for_delivery || 0;
+  const deliveredCount = dashboard?.ordersByStatus.delivered || 0;
+  const attentionCount = pendingCount + approvedCount;
+  const recentQueue = useMemo(
+    () => dashboard?.recentOrders?.slice(0, 3) || [],
+    [dashboard?.recentOrders],
+  );
+
   if (loading && !dashboard) {
     return <LoadingOverlay label="Loading dashboard" />;
   }
 
   return (
-    <ScreenLayout
-      flushTop
-      title="Operations Overview"
-      subtitle="Key commercial metrics for customers, workers, orders, and payroll across your organization."
-    >
+    <ScreenLayout flushTop>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
       <View style={styles.orgCard}>
-        <Text style={styles.orgLabel}>Organization pulse</Text>
+        <Text style={styles.orgLabel}>Operations command</Text>
         <Text style={styles.orgName}>{user?.organization?.name || 'Workspace'}</Text>
         <Text style={styles.orgDescription}>
-          Live demand, labor cost, and payroll movement for your dispatch network.
+          {attentionCount
+            ? `${attentionCount} order${attentionCount === 1 ? '' : 's'} need assignment or approval right now.`
+            : 'Orders, teams, and payouts are all moving without an immediate queue spike.'}
         </Text>
         <View style={styles.heroMetaRow}>
           <View style={styles.heroChip}>
-            <Text style={styles.heroChipLabel}>Share code</Text>
-            <Text style={styles.heroChipValue}>{user?.organization?.code || 'Pending'}</Text>
+            <Text style={styles.heroChipLabel}>Org code</Text>
+            <Text style={styles.heroChipValue}>{orgCode || 'Pending'}</Text>
           </View>
           <View style={styles.heroChip}>
-            <Text style={styles.heroChipLabel}>Salary paid</Text>
+            <Text style={styles.heroChipLabel}>Payroll paid</Text>
             <Text style={styles.heroChipValue}>{formatCurrency(dashboard?.totalPaidToWorkers || 0)}</Text>
           </View>
         </View>
@@ -143,6 +152,23 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
           </Pressable>
         </View>
       </View>
+
+      <View style={styles.grid}>
+        <StatCard
+          label="Attention"
+          value={attentionCount}
+          iconName="alert-circle-outline"
+          helper="Pending or approved"
+          accent={theme.colors.warning}
+        />
+        <StatCard
+          label="Live"
+          value={liveCount}
+          iconName="navigate-outline"
+          helper="Out for delivery"
+          accent={theme.colors.accentSecondary}
+        />
+      </View>
       <View style={styles.grid}>
         <StatCard
           label="Customers"
@@ -153,9 +179,9 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
         <StatCard
           label="Workers"
           value={dashboard?.totalWorkers || 0}
-          accent={theme.colors.accentSecondary}
           iconName="people-outline"
           helper="Field team accounts"
+          accent={theme.colors.accentSecondary}
         />
       </View>
       <View style={styles.grid}>
@@ -163,7 +189,7 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
           label="Orders"
           value={dashboard?.totalOrders || 0}
           iconName="receipt-outline"
-          helper="Total orders in the org"
+          helper={`Delivered ${deliveredCount}`}
         />
         <StatCard
           label="Worker Cost"
@@ -173,79 +199,149 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
           helper="Accrued wages to date"
         />
       </View>
+
+      <View style={styles.quickActionRow}>
+        <Pressable
+          onPress={() => navigation.getParent()?.navigate('AdminOrdersTab')}
+          style={styles.quickAction}
+        >
+          <AppIcon color={theme.colors.accent} name="receipt-outline" size={18} />
+          <Text style={styles.quickActionTitle}>Open queue</Text>
+          <Text style={styles.quickActionMeta}>{attentionCount} need action</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.getParent()?.navigate('AdminOrdersTab', { screen: 'MapTracking' })}
+          style={styles.quickAction}
+        >
+          <AppIcon color={theme.colors.accentSecondary} name="navigate-outline" size={18} />
+          <Text style={styles.quickActionTitle}>Live map</Text>
+          <Text style={styles.quickActionMeta}>{liveCount} on the road</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.getParent()?.navigate('AdminOpsTab')}
+          style={styles.quickAction}
+        >
+          <AppIcon color={theme.colors.warning} name="layers-outline" size={18} />
+          <Text style={styles.quickActionTitle}>Operations</Text>
+          <Text style={styles.quickActionMeta}>Products, staff, pay</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.breakdownCard}>
-        <Text style={styles.sectionTitle}>Order Breakdown</Text>
+        <Text style={styles.sectionTitle}>Queue Breakdown</Text>
         <View style={styles.breakdownGrid}>
           <View style={styles.breakdownChip}>
             <Text style={styles.breakdownChipLabel}>Pending</Text>
-            <Text style={styles.breakdownChipValue}>{dashboard?.ordersByStatus.pending || 0}</Text>
+            <Text style={styles.breakdownChipValue}>{pendingCount}</Text>
           </View>
           <View style={styles.breakdownChip}>
             <Text style={styles.breakdownChipLabel}>Approved</Text>
-            <Text style={styles.breakdownChipValue}>{dashboard?.ordersByStatus.approved || 0}</Text>
+            <Text style={styles.breakdownChipValue}>{approvedCount}</Text>
           </View>
           <View style={styles.breakdownChip}>
-            <Text style={styles.breakdownChipLabel}>Out for delivery</Text>
-            <Text style={styles.breakdownChipValue}>{dashboard?.ordersByStatus.out_for_delivery || 0}</Text>
+            <Text style={styles.breakdownChipLabel}>Live</Text>
+            <Text style={styles.breakdownChipValue}>{liveCount}</Text>
           </View>
           <View style={styles.breakdownChip}>
             <Text style={styles.breakdownChipLabel}>Delivered</Text>
-            <Text style={styles.breakdownChipValue}>{dashboard?.ordersByStatus.delivered || 0}</Text>
+            <Text style={styles.breakdownChipValue}>{deliveredCount}</Text>
           </View>
         </View>
       </View>
-      <Text style={styles.sectionTitle}>Recent Orders</Text>
-      {dashboard?.recentOrders?.map((order) => (
-        <OrderCard
-          key={order._id}
-          order={order}
-          actionLabel="View"
-          onActionPress={() => navigation.getParent()?.navigate('AdminManageTab')}
-        />
-      ))}
-      {!loading && dashboard?.recentOrders?.length === 0 ? (
+
+      <Text style={styles.sectionTitle}>Recent Queue</Text>
+      {recentQueue.length ? (
+        recentQueue.map((order) => (
+          <OrderCard
+            key={order._id}
+            order={order}
+            actionLabel={order.status === 'pending' || order.status === 'approved' ? 'Assign' : 'Track'}
+            onActionPress={() =>
+              navigation.getParent()?.navigate('AdminOrdersTab', {
+                screen: order.status === 'pending' || order.status === 'approved' ? 'Orders' : 'MapTracking',
+              })
+            }
+          />
+        ))
+      ) : (
         <View style={styles.breakdownCard}>
           <Text style={styles.breakdownLine}>No orders have been placed yet.</Text>
         </View>
-      ) : null}
+      )}
     </ScreenLayout>
   );
 };
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    error: {
-      color: theme.colors.danger,
-    },
-    orgCard: {
-      backgroundColor: theme.colors.surfaceRaised,
+    breakdownCard: {
+      backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
       borderRadius: theme.radius.md,
       borderWidth: 1,
-      gap: 10,
-      padding: theme.spacing.lg,
-      shadowColor: theme.colors.shadow,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: theme.isDark ? 0.18 : 0.08,
-      shadowRadius: 18,
+      gap: 8,
+      padding: theme.spacing.md,
     },
-    orgLabel: {
+    breakdownChip: {
+      backgroundColor: theme.colors.surfaceMuted,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.sm,
+      borderWidth: 1,
+      gap: 4,
+      minWidth: '47%',
+      padding: theme.spacing.sm,
+      width: '47%',
+    },
+    breakdownChipLabel: {
       color: theme.colors.textMuted,
-      fontSize: 12,
-      letterSpacing: 0.8,
+      fontSize: 11,
+      letterSpacing: 0.7,
       textTransform: 'uppercase',
     },
-    orgName: {
+    breakdownChipValue: {
       color: theme.colors.text,
       fontFamily: theme.fontFamily.heading,
-      fontSize: 24,
+      fontSize: 18,
       fontWeight: '700',
     },
-    orgDescription: {
-      color: theme.colors.textMuted,
-      lineHeight: 21,
+    breakdownGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.sm,
     },
-    heroMetaRow: {
+    breakdownLine: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
+    },
+    error: {
+      color: theme.colors.danger,
+    },
+    grid: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+    },
+    heroActionButton: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceMuted,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'center',
+      minHeight: 42,
+      paddingHorizontal: theme.spacing.md,
+    },
+    heroActionLabel: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+    },
+    heroActions: {
       flexDirection: 'row',
       gap: theme.spacing.sm,
     },
@@ -270,68 +366,61 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 14,
       fontWeight: '700',
     },
-    heroActions: {
+    heroMetaRow: {
       flexDirection: 'row',
       gap: theme.spacing.sm,
     },
-    heroActionButton: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.surfaceMuted,
+    orgCard: {
+      backgroundColor: theme.colors.surfaceRaised,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      gap: 10,
+      padding: theme.spacing.lg,
+      shadowColor: theme.colors.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: theme.isDark ? 0.18 : 0.08,
+      shadowRadius: 18,
+    },
+    orgDescription: {
+      color: theme.colors.textMuted,
+      lineHeight: 21,
+    },
+    orgLabel: {
+      color: theme.colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    orgName: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 24,
+      fontWeight: '700',
+    },
+    quickAction: {
+      backgroundColor: theme.colors.surfaceRaised,
       borderColor: theme.colors.border,
       borderRadius: theme.radius.md,
       borderWidth: 1,
       flex: 1,
-      flexDirection: 'row',
-      gap: 8,
-      justifyContent: 'center',
-      minHeight: 42,
-      paddingHorizontal: theme.spacing.md,
-    },
-    heroActionLabel: {
-      color: theme.colors.text,
-      fontFamily: theme.fontFamily.heading,
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
-    },
-    grid: {
-      flexDirection: 'row',
-      gap: theme.spacing.md,
-    },
-    breakdownCard: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      gap: 8,
+      gap: 6,
+      minHeight: 96,
       padding: theme.spacing.md,
     },
-    breakdownGrid: {
+    quickActionMeta: {
+      color: theme.colors.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    quickActionRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
       gap: theme.spacing.sm,
     },
-    breakdownChip: {
-      backgroundColor: theme.colors.surfaceMuted,
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.sm,
-      borderWidth: 1,
-      gap: 4,
-      minWidth: '47%',
-      padding: theme.spacing.sm,
-      width: '47%',
-    },
-    breakdownChipLabel: {
-      color: theme.colors.textMuted,
-      fontSize: 11,
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
-    },
-    breakdownChipValue: {
+    quickActionTitle: {
       color: theme.colors.text,
       fontFamily: theme.fontFamily.heading,
-      fontSize: 20,
+      fontSize: 16,
       fontWeight: '700',
     },
     sectionTitle: {
@@ -339,9 +428,6 @@ const createStyles = (theme: AppTheme) =>
       fontFamily: theme.fontFamily.heading,
       fontSize: 18,
       fontWeight: '700',
-    },
-    breakdownLine: {
-      color: theme.colors.textMuted,
     },
   });
 

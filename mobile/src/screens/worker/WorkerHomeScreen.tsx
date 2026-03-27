@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ActionTile } from '../../components/ActionTile';
 import { Card } from '../../components/Card';
+import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
 import { StatCard } from '../../components/StatCard';
 import api, { getApiErrorStatus } from '../../services/api';
@@ -10,7 +11,7 @@ import { ApiEnvelope, Order, WorkerEarnings } from '../../types';
 import { AppTheme } from '../../theme/theme';
 import { useAppTheme } from '../../theme/ThemeProvider';
 import { useThemedStyles } from '../../theme/useThemedStyles';
-import { extractErrorMessage, formatCurrency, formatDate, formatTime } from '../../utils/formatters';
+import { extractErrorMessage, formatCurrency, formatDate, formatTime, humanizeStatus } from '../../utils/formatters';
 
 interface AttendanceWorkerResponse {
   records: Array<{
@@ -87,7 +88,23 @@ const WorkerHomeScreen = ({ navigation }: { navigation: any }) => {
     return unsubscribe;
   }, [loadSummary, navigation]);
 
-  const activeOrders = orders.filter((order) => order.status !== 'delivered').length;
+  const sortedOrders = useMemo(
+    () =>
+      [...orders].sort((left, right) => {
+        const leftDelivered = left.status === 'delivered' ? 1 : 0;
+        const rightDelivered = right.status === 'delivered' ? 1 : 0;
+
+        if (leftDelivered !== rightDelivered) {
+          return leftDelivered - rightDelivered;
+        }
+
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      }),
+    [orders],
+  );
+  const activeOrders = sortedOrders.filter((order) => order.status !== 'delivered').length;
+  const completedOrders = sortedOrders.filter((order) => order.status === 'delivered').length;
+  const nextOrder = sortedOrders.find((order) => order.status !== 'delivered') || null;
   const todayEarnings = todayAttendance?.dailyWage || 0;
   const attendanceStatus = todayAttendance?.checkOutTime
     ? `Checked out at ${formatTime(todayAttendance.checkOutTime)}`
@@ -96,67 +113,98 @@ const WorkerHomeScreen = ({ navigation }: { navigation: any }) => {
       : 'Not checked in';
 
   return (
-    <ScreenLayout
-      title={`Shift Ready, ${user?.name?.split(' ')[0] || 'Worker'}`}
-      subtitle={`Today summary for ${user?.organization?.name || 'your workspace'} with attendance, earnings, and active dispatch work.`}
-    >
+    <ScreenLayout>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Card style={styles.heroCard}>
-        <Text style={styles.heroEyebrow}>Today status</Text>
-        <Text style={styles.heroTitle}>{attendanceStatus}</Text>
+        <Text style={styles.heroEyebrow}>Today</Text>
+        <Text style={styles.heroTitle}>{user?.name?.split(' ')[0] || 'Worker'}</Text>
         <Text style={styles.heroMeta}>
-          Outstanding wages: {formatCurrency(earnings?.outstandingBalance || 0)}
+          {todayAttendance?.checkInTime
+            ? `${activeOrders} active job${activeOrders === 1 ? '' : 's'} on your route.`
+            : 'Start attendance first to begin your route with a verified location pin.'}
         </Text>
+        <Text style={styles.heroStatus}>{attendanceStatus}</Text>
       </Card>
+
       <View style={styles.grid}>
-        <StatCard
-          label="Attendance"
-          value={todayAttendance?.checkInTime ? 'Done' : 'Open'}
-          iconName="time-outline"
-          helper={todayAttendance?.checkInTime ? 'Shift opened' : 'Awaiting check-in'}
-        />
         <StatCard
           label="Today Pay"
           value={formatCurrency(todayEarnings)}
           accent={theme.colors.accentSecondary}
           iconName="wallet-outline"
-          helper="Today wage snapshot"
+          helper="Current daily wage"
+        />
+        <StatCard
+          label="Active Jobs"
+          value={activeOrders}
+          accent={theme.colors.warning}
+          iconName="trail-sign-outline"
+          helper="Still on your route"
         />
       </View>
       <View style={styles.grid}>
         <StatCard
-          label="Assigned Orders"
-          value={orders.length}
-          iconName="file-tray-full-outline"
-          helper="Jobs assigned to you"
+          label="Completed"
+          value={completedOrders}
+          iconName="checkmark-done-outline"
+          helper="Finished deliveries"
+          accent={theme.colors.accent}
         />
         <StatCard
-          label="Active Orders"
-          value={activeOrders}
-          accent={theme.colors.warning}
-          iconName="flash-outline"
-          helper="Still in motion"
+          label="Outstanding"
+          value={formatCurrency(earnings?.outstandingBalance || 0)}
+          iconName="cash-outline"
+          helper="Still to be paid"
+          accent={theme.colors.accentSecondary}
         />
       </View>
-      <Card style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Today Status</Text>
-        <Text style={styles.summaryLine}>{attendanceStatus}</Text>
-        <Text style={styles.summaryLine}>Outstanding wages: {formatCurrency(earnings?.outstandingBalance || 0)}</Text>
-      </Card>
+
+      {nextOrder ? (
+        <Card style={styles.nextJobCard}>
+          <Text style={styles.nextJobEyebrow}>Next stop</Text>
+          <Text style={styles.nextJobTitle}>Order #{nextOrder._id.slice(-6).toUpperCase()}</Text>
+          <Text style={styles.nextJobMeta}>{humanizeStatus(nextOrder.status)}</Text>
+          <Text numberOfLines={2} style={styles.nextJobAddress}>
+            {nextOrder.deliveryAddress || 'Customer will confirm exact delivery point on call.'}
+          </Text>
+          <View style={styles.nextJobActions}>
+            <PrimaryButton
+              label="Open Route"
+              onPress={() => navigation.getParent()?.navigate('WorkerOrdersTab', { screen: 'AssignedOrders' })}
+              style={styles.nextJobButton}
+            />
+            <PrimaryButton
+              label="Update Status"
+              variant="outline"
+              onPress={() => navigation.getParent()?.navigate('WorkerOrdersTab', { screen: 'Delivery', params: { order: nextOrder } })}
+              style={styles.nextJobButton}
+            />
+          </View>
+        </Card>
+      ) : null}
+
       <ActionTile
-        title="Open Attendance"
+        title="Attendance"
         subtitle="Check in, check out, and confirm your live field location."
         iconName="time-outline"
         badge={todayAttendance?.checkOutTime ? 'Closed' : todayAttendance?.checkInTime ? 'Live' : 'Pending'}
         accentColor={theme.colors.warning}
-        onPress={() => navigation.getParent()?.navigate('WorkerManageTab', { screen: 'Attendance' })}
+        onPress={() => navigation.getParent()?.navigate('WorkerTodayTab', { screen: 'Attendance' })}
       />
       <ActionTile
-        title="View Assigned Orders"
-        subtitle="Jump straight into today’s deliveries and navigation."
+        title="Orders"
+        subtitle="See the current route, navigation, and delivery updates."
         iconName="trail-sign-outline"
-        badge={`${orders.length} jobs`}
-        onPress={() => navigation.getParent()?.navigate('WorkerManageTab', { screen: 'AssignedOrders' })}
+        badge={`${activeOrders} live`}
+        onPress={() => navigation.getParent()?.navigate('WorkerOrdersTab', { screen: 'AssignedOrders' })}
+      />
+      <ActionTile
+        title="Pay"
+        subtitle="Review total wages, payouts, and any outstanding amount."
+        iconName="wallet-outline"
+        badge={formatCurrency(earnings?.outstandingBalance || 0)}
+        accentColor={theme.colors.accentSecondary}
+        onPress={() => navigation.getParent()?.navigate('WorkerPayTab')}
       />
     </ScreenLayout>
   );
@@ -185,6 +233,17 @@ const createStyles = (theme: AppTheme) =>
       letterSpacing: 0.7,
       textTransform: 'uppercase',
     },
+    heroMeta: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
+    },
+    heroStatus: {
+      color: theme.colors.accentSecondary,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
     heroTitle: {
       color: theme.colors.text,
       fontFamily: theme.fontFamily.heading,
@@ -192,24 +251,40 @@ const createStyles = (theme: AppTheme) =>
       fontWeight: '700',
       lineHeight: 30,
     },
-    heroMeta: {
-      color: theme.colors.accentSecondary,
-      fontFamily: theme.fontFamily.heading,
-      fontSize: 13,
-      fontWeight: '700',
-      letterSpacing: 0.5,
+    nextJobActions: {
+      flexDirection: 'row',
+      gap: theme.spacing.sm,
     },
-    summaryCard: {
+    nextJobAddress: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
+    },
+    nextJobButton: {
+      flex: 1,
+    },
+    nextJobCard: {
+      backgroundColor: theme.colors.surfaceRaised,
       gap: 8,
     },
-    summaryTitle: {
+    nextJobEyebrow: {
+      color: theme.colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0.7,
+      textTransform: 'uppercase',
+    },
+    nextJobMeta: {
+      color: theme.colors.accent,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    nextJobTitle: {
       color: theme.colors.text,
       fontFamily: theme.fontFamily.heading,
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: '700',
-    },
-    summaryLine: {
-      color: theme.colors.textMuted,
     },
   });
 

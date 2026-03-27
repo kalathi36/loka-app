@@ -9,6 +9,7 @@ interface CartContextValue {
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
+  getItemQuantity: (productId: string) => number;
   clearCart: () => void;
 }
 
@@ -18,31 +19,85 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
 
   const addToCart = (product: Product) => {
+    if (product.stock <= 0) {
+      showToast({
+        type: 'error',
+        title: 'Out of stock',
+        message: `${product.name} is currently unavailable.`,
+      });
+      return;
+    }
+
+    let wasAdded = false;
+    let stockExceeded = false;
+
     setItems((currentItems) => {
       const existingItem = currentItems.find((item) => item._id === product._id);
 
       if (existingItem) {
+        if (existingItem.quantity >= product.stock) {
+          stockExceeded = true;
+          return currentItems;
+        }
+
+        wasAdded = true;
         return currentItems.map((item) =>
           item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item,
         );
       }
 
+      wasAdded = true;
       return [...currentItems, { ...product, quantity: 1 }];
     });
 
-    showToast({
-      type: 'success',
-      title: 'Added to cart',
-      message: product.name,
-    });
+    if (stockExceeded) {
+      showToast({
+        type: 'info',
+        title: 'Stock limit reached',
+        message: `Only ${product.stock} unit${product.stock === 1 ? '' : 's'} available.`,
+      });
+      return;
+    }
+
+    if (wasAdded) {
+      showToast({
+        type: 'success',
+        title: 'Added to cart',
+        message: product.name,
+      });
+    }
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
+    let stockExceeded = false;
+
     setItems((currentItems) =>
       currentItems
-        .map((item) => (item._id === productId ? { ...item, quantity } : item))
+        .map((item) => {
+          if (item._id !== productId) {
+            return item;
+          }
+
+          const nextQuantity = Math.min(Math.max(quantity, 0), item.stock);
+
+          if (quantity > item.stock) {
+            stockExceeded = true;
+          }
+
+          return { ...item, quantity: nextQuantity };
+        })
         .filter((item) => item.quantity > 0),
     );
+
+    if (stockExceeded) {
+      const item = items.find((entry) => entry._id === productId);
+
+      showToast({
+        type: 'info',
+        title: 'Stock limit reached',
+        message: item ? `Only ${item.stock} unit${item.stock === 1 ? '' : 's'} available.` : 'Cart updated.',
+      });
+    }
   };
 
   const removeFromCart = (productId: string) => {
@@ -61,6 +116,8 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const getItemQuantity = (productId: string) =>
+    items.find((item) => item._id === productId)?.quantity || 0;
 
   return (
     <CartContext.Provider
@@ -71,6 +128,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         addToCart,
         removeFromCart,
         updateQuantity,
+        getItemQuantity,
         clearCart,
       }}
     >

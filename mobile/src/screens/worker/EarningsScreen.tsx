@@ -49,7 +49,7 @@ const EarningsScreen = () => {
   }
 
   return (
-    <ScreenLayout title="Earnings" subtitle="Track days worked, daily wages, and your current outstanding balance.">
+    <ScreenLayout>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Text style={styles.sectionTitle}>Summary</Text>
       <Card style={styles.statsCard}>

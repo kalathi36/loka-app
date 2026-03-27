@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { StyleSheet, Text, View } from 'react-native';
+import { Marker } from 'react-native-maps';
 import { EmptyState } from '../../components/EmptyState';
 import { Card } from '../../components/Card';
+import { MapPanel } from '../../components/MapPanel';
 import { OrderCard } from '../../components/OrderCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
+import { StatusChip } from '../../components/StatusChip';
 import api from '../../services/api';
 import { getLocationDetails, LocationDetails, openInExternalMap } from '../../services/location';
 import { getSocket } from '../../services/socket';
@@ -14,7 +16,12 @@ import { AppTheme } from '../../theme/theme';
 import { useAppTheme } from '../../theme/ThemeProvider';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { upsertById } from '../../utils/collections';
-import { extractErrorMessage, formatCurrency, getEntityId } from '../../utils/formatters';
+import { extractErrorMessage, formatCurrency, formatDateTime, getEntityId } from '../../utils/formatters';
+import {
+  formatDeliveryWindowLabel,
+  formatPaymentMethodLabel,
+  parseOrderNotes,
+} from '../../utils/orderPreferences';
 
 const fallbackRegion = {
   latitude: 12.9716,
@@ -62,6 +69,7 @@ const OrderTrackingScreen = ({ navigation, route }: { navigation: any; route: an
     () => orders.find((order) => order._id === selectedOrderId) || orders[0],
     [orders, selectedOrderId],
   );
+  const selectedOrderNotes = useMemo(() => parseOrderNotes(selectedOrder?.notes), [selectedOrder?.notes]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -124,22 +132,43 @@ const OrderTrackingScreen = ({ navigation, route }: { navigation: any; route: an
           longitudeDelta: 0.08,
         }
       : fallbackRegion;
+  const workerMarkerPoint = workerLocation
+    ? {
+        latitude: workerLocation.latitude,
+        longitude: workerLocation.longitude,
+      }
+    : null;
 
   return (
-    <ScreenLayout title="Track Orders" subtitle="Status changes and worker movement update automatically.">
+    <ScreenLayout>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {selectedOrder ? (
         <>
           <Card style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Selected Order</Text>
-            <Text style={styles.summaryLine}>Status: {selectedOrder.status.replace(/_/g, ' ')}</Text>
+            <View style={styles.summaryHeader}>
+              <Text style={styles.summaryTitle}>Selected Order</Text>
+              <StatusChip status={selectedOrder.status} />
+            </View>
             <Text style={styles.summaryLine}>Amount: {formatCurrency(selectedOrder.totalAmount)}</Text>
             <Text style={styles.summaryLine}>Worker: {selectedOrder.assignedWorker ? 'Assigned' : 'Pending assignment'}</Text>
+            <Text style={styles.summaryLine}>Updated: {formatDateTime(selectedOrder.updatedAt)}</Text>
             <Text style={styles.summaryLine}>
               Drop point: {selectedOrder.deliveryAddress || destinationDetails?.title || 'Awaiting location'}
             </Text>
+            <Text style={styles.summaryLine}>
+              Payment: {formatPaymentMethodLabel(selectedOrderNotes.paymentMethod)}
+            </Text>
+            <Text style={styles.summaryLine}>
+              Delivery slot: {formatDeliveryWindowLabel(selectedOrderNotes.deliveryWindow)}
+            </Text>
             {destinationDetails?.subtitle ? (
               <Text style={styles.summaryHint}>{destinationDetails.subtitle}</Text>
+            ) : null}
+            {selectedOrderNotes.customerInstructions ? (
+              <Text style={styles.summaryHint}>Instructions: {selectedOrderNotes.customerInstructions}</Text>
+            ) : null}
+            {selectedOrderNotes.workerUpdate ? (
+              <Text style={styles.summaryHint}>Latest worker update: {selectedOrderNotes.workerUpdate}</Text>
             ) : null}
             {workerLocationDetails ? (
               <>
@@ -148,38 +177,44 @@ const OrderTrackingScreen = ({ navigation, route }: { navigation: any; route: an
               </>
             ) : null}
           </Card>
-          {Platform.OS === 'android' && __DEV__ ? (
-            <Card style={styles.mapNoticeCard}>
-              <Text style={styles.mapNoticeTitle}>Android map tiles</Text>
-              <Text style={styles.mapNoticeText}>
-                If this panel looks blank, rebuild Android with a valid Google Maps key in
-                {' '}`MAPS_API_KEY`. You can still open the exact delivery point below.
-              </Text>
-            </Card>
-          ) : null}
-          <View style={styles.mapShell}>
-            <MapView
-              liteMode={Platform.OS === 'android'}
-              loadingEnabled
-              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-              style={styles.map}
-              initialRegion={initialRegion}
-            >
-              {selectedOrder.deliveryLocation ? (
-                <Marker coordinate={selectedOrder.deliveryLocation} title="Delivery Point" pinColor={theme.colors.accent} />
-              ) : null}
-              {workerLocation ? (
-                <Marker
-                  coordinate={{
-                    latitude: workerLocation.latitude,
-                    longitude: workerLocation.longitude,
-                  }}
-                  title={workerLocation.workerName}
-                  pinColor={theme.colors.accentSecondary}
-                />
-              ) : null}
-            </MapView>
-          </View>
+          <MapPanel
+            fallbackActionLabel={selectedOrder.deliveryLocation ? 'Open delivery point' : undefined}
+            fallbackDescription="You can still open the exact delivery point in your default maps app while live tiles reconnect."
+            fallbackTitle="Live map is temporarily unavailable."
+            initialRegion={initialRegion}
+            onFallbackAction={
+              selectedOrder.deliveryLocation
+                ? () =>
+                    openInExternalMap(
+                      selectedOrder.deliveryLocation!,
+                      selectedOrder.deliveryAddress || destinationDetails?.title || 'Delivery point',
+                    )
+                : undefined
+            }
+            points={[
+              ...(selectedOrder.deliveryLocation ? [selectedOrder.deliveryLocation] : []),
+              ...(workerMarkerPoint ? [workerMarkerPoint] : []),
+            ]}
+            statusLabel={workerMarkerPoint ? 'Driver live' : 'Awaiting driver'}
+            statusTone={workerMarkerPoint ? 'accent' : 'muted'}
+            subtitle={
+              workerMarkerPoint
+                ? 'Driver and drop point are shown together for a live delivery snapshot.'
+                : 'The drop point is pinned. Driver GPS appears here once the order is assigned.'
+            }
+            title="Delivery route"
+          >
+            {selectedOrder.deliveryLocation ? (
+              <Marker coordinate={selectedOrder.deliveryLocation} title="Delivery Point" pinColor={theme.colors.accent} />
+            ) : null}
+            {workerMarkerPoint ? (
+              <Marker
+                coordinate={workerMarkerPoint}
+                title={workerLocation?.workerName}
+                pinColor={theme.colors.accentSecondary}
+              />
+            ) : null}
+          </MapPanel>
           <View style={styles.quickActions}>
             <PrimaryButton label="Order Support" variant="ghost" onPress={() => navigation.navigate('Chat')} />
             {selectedOrder.deliveryLocation ? (
@@ -197,7 +232,7 @@ const OrderTrackingScreen = ({ navigation, route }: { navigation: any; route: an
             <PrimaryButton
               label="Shop More"
               variant="outline"
-              onPress={() => navigation.getParent()?.navigate('CustomerHomeTab')}
+              onPress={() => navigation.getParent()?.navigate('CustomerShopTab')}
             />
           </View>
         </>
@@ -222,21 +257,16 @@ const createStyles = (theme: AppTheme) =>
     error: {
       color: theme.colors.danger,
     },
-    mapShell: {
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      overflow: 'hidden',
-    },
-    map: {
-      height: 300,
-      width: '100%',
-    },
     quickActions: {
       gap: 10,
     },
     summaryCard: {
       gap: 6,
+    },
+    summaryHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
     },
     summaryTitle: {
       color: theme.colors.text,
@@ -252,19 +282,6 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textMuted,
       fontSize: 12,
       lineHeight: 18,
-    },
-    mapNoticeCard: {
-      gap: 6,
-    },
-    mapNoticeTitle: {
-      color: theme.colors.text,
-      fontFamily: theme.fontFamily.heading,
-      fontSize: 15,
-      fontWeight: '700',
-    },
-    mapNoticeText: {
-      color: theme.colors.textMuted,
-      lineHeight: 20,
     },
     selectedOrder: {
       borderColor: theme.colors.accentSecondary,

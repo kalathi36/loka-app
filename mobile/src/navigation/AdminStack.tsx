@@ -2,7 +2,6 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import AdminChatScreen from '../screens/admin/AdminChatScreen';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
-import ProductInsightsScreen from '../screens/admin/ProductInsightsScreen';
 import AdminManageScreen from '../screens/admin/AdminManageScreen';
 import AssignWorkerScreen from '../screens/admin/AssignWorkerScreen';
 import AttendanceManagementScreen from '../screens/admin/AttendanceManagementScreen';
@@ -10,6 +9,7 @@ import CustomerListScreen from '../screens/admin/CustomerListScreen';
 import MapTrackingScreen from '../screens/admin/MapTrackingScreen';
 import OrdersScreen from '../screens/admin/OrdersScreen';
 import PaymentsScreen from '../screens/admin/PaymentsScreen';
+import ProductInsightsScreen from '../screens/admin/ProductInsightsScreen';
 import ProductManagementScreen from '../screens/admin/ProductManagementScreen';
 import WorkerManagementScreen from '../screens/admin/WorkerManagementScreen';
 import EditProfileScreen from '../screens/common/EditProfileScreen';
@@ -24,63 +24,69 @@ import {
 import { useAppTheme } from '../theme/ThemeProvider';
 
 const Tab = createRoleTabNavigator();
-const HomeStack = createStackNavigator();
-const ManageStack = createStackNavigator();
-const InsightsStack = createStackNavigator();
+const OverviewStack = createStackNavigator();
+const OrdersStack = createStackNavigator();
+const OpsStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 
-const AdminHomeStack = () => {
+const AdminOverviewStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <HomeStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <HomeStack.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ title: 'Loka Admin' }} />
-    </HomeStack.Navigator>
+    <OverviewStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <OverviewStack.Screen name="AdminDashboard" component={AdminDashboardScreen} options={{ title: 'Overview' }} />
+    </OverviewStack.Navigator>
   );
 };
 
-const AdminManageStack = () => {
+const AdminOrdersStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <ManageStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <ManageStack.Screen name="AdminManage" component={AdminManageScreen} options={{ title: 'Manage' }} />
-      <ManageStack.Screen name="Orders" component={OrdersScreen} options={{ title: 'All Orders' }} />
-      <ManageStack.Screen name="AssignWorker" component={AssignWorkerScreen} options={{ title: 'Assign Worker' }} />
-      <ManageStack.Screen
+    <OrdersStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <OrdersStack.Screen name="Orders" component={OrdersScreen} options={{ title: 'Orders' }} />
+      <OrdersStack.Screen name="AssignWorker" component={AssignWorkerScreen} options={{ title: 'Assign Worker' }} />
+      <OrdersStack.Screen
+        name="MapTracking"
+        component={MapTrackingScreen}
+        options={{ title: 'Live Tracking' }}
+      />
+      <OrdersStack.Screen name="AdminChat" component={AdminChatScreen} options={{ title: 'Support' }} />
+    </OrdersStack.Navigator>
+  );
+};
+
+const AdminOpsStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <OpsStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <OpsStack.Screen name="AdminManage" component={AdminManageScreen} options={{ title: 'Operations' }} />
+      <OpsStack.Screen
         name="ProductManagement"
         component={ProductManagementScreen}
         options={{ title: 'Products' }}
       />
-      <ManageStack.Screen
+      <OpsStack.Screen
         name="WorkerManagement"
         component={WorkerManagementScreen}
         options={{ title: 'Workers' }}
       />
-      <ManageStack.Screen
+      <OpsStack.Screen
         name="AttendanceManagement"
         component={AttendanceManagementScreen}
         options={{ title: 'Attendance' }}
       />
-      <ManageStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Payments' }} />
-      <ManageStack.Screen name="CustomerList" component={CustomerListScreen} options={{ title: 'Customers' }} />
-      <ManageStack.Screen name="MapTracking" component={MapTrackingScreen} options={{ title: 'Live Tracking' }} />
-      <ManageStack.Screen name="AdminChat" component={AdminChatScreen} options={{ title: 'Support Chat' }} />
-    </ManageStack.Navigator>
-  );
-};
-
-const AdminInsightsStack = () => {
-  const { theme } = useAppTheme();
-
-  return (
-    <InsightsStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <InsightsStack.Screen
+      <OpsStack.Screen name="Payments" component={PaymentsScreen} options={{ title: 'Payments' }} />
+      <OpsStack.Screen name="CustomerList" component={CustomerListScreen} options={{ title: 'Customers' }} />
+      <OpsStack.Screen name="MapTracking" component={MapTrackingScreen} options={{ title: 'Live Tracking' }} />
+      <OpsStack.Screen name="AdminChat" component={AdminChatScreen} options={{ title: 'Support' }} />
+      <OpsStack.Screen
         name="ProductInsights"
         component={ProductInsightsScreen}
         options={{ title: 'Insights' }}
       />
-    </InsightsStack.Navigator>
+    </OpsStack.Navigator>
   );
 };
 
@@ -106,26 +112,26 @@ const AdminStack = () => {
   return (
     <Tab.Navigator screenOptions={buildTabScreenOptions(theme)}>
       <Tab.Screen
-        name="AdminHomeTab"
-        component={AdminHomeStack}
+        name="AdminOverviewTab"
+        component={AdminOverviewStack}
         options={{
-          title: 'Home',
+          title: 'Overview',
           ...renderTabGlyph('stats-chart-outline'),
         }}
       />
       <Tab.Screen
-        name="AdminInsightsTab"
-        component={AdminInsightsStack}
+        name="AdminOrdersTab"
+        component={AdminOrdersStack}
         options={{
-          title: 'Insights',
-          ...renderTabGlyph('bar-chart-outline'),
+          title: 'Orders',
+          ...renderTabGlyph('receipt-outline'),
         }}
       />
       <Tab.Screen
-        name="AdminManageTab"
-        component={AdminManageStack}
+        name="AdminOpsTab"
+        component={AdminOpsStack}
         options={{
-          title: 'Manage',
+          title: 'Ops',
           ...renderTabGlyph('layers-outline'),
         }}
       />

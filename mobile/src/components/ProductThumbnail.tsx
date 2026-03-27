@@ -104,7 +104,7 @@ export const ProductThumbnail = ({
     return (
       <Image
         onError={() => setFailed(true)}
-        resizeMode="cover"
+        resizeMode="contain"
         source={{ uri: imageUrl }}
         style={[styles.image, { height }, style as StyleProp<ImageStyle>]}
       />
@@ -147,6 +147,7 @@ export const ProductThumbnail = ({
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     image: {
+      backgroundColor: theme.colors.surface,
       borderRadius: theme.radius.md,
       width: '100%',
     },

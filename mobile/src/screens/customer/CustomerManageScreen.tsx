@@ -12,7 +12,7 @@ const CustomerManageScreen = ({ navigation }: { navigation: any }) => {
   const styles = useThemedStyles(createStyles);
 
   return (
-    <ScreenLayout title="Manage Orders" subtitle="Everything after browsing: cart, orders, live tracking, and support.">
+    <ScreenLayout>
       <Card style={styles.heroCard}>
         <Text style={styles.heroEyebrow}>Order desk</Text>
         <Text style={styles.heroTitle}>

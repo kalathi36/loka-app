@@ -2,7 +2,6 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import CartScreen from '../screens/customer/CartScreen';
 import ChatScreen from '../screens/customer/ChatScreen';
-import CustomerManageScreen from '../screens/customer/CustomerManageScreen';
 import CustomerOrdersScreen from '../screens/customer/CustomerOrdersScreen';
 import OrderScreen from '../screens/customer/OrderScreen';
 import OrderTrackingScreen from '../screens/customer/OrderTrackingScreen';
@@ -20,36 +19,51 @@ import { useCart } from '../store/CartContext';
 import { useAppTheme } from '../theme/ThemeProvider';
 
 const Tab = createRoleTabNavigator();
-const HomeStack = createStackNavigator();
-const ManageStack = createStackNavigator();
+const ShopStack = createStackNavigator();
+const OrdersStack = createStackNavigator();
+const CartStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 
-const CustomerHomeStack = () => {
+const CustomerShopStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <HomeStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <HomeStack.Screen name="Products" component={ProductListScreen} options={{ title: 'Loka Shop' }} />
-    </HomeStack.Navigator>
+    <ShopStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <ShopStack.Screen name="Products" component={ProductListScreen} options={{ title: 'Shop' }} />
+    </ShopStack.Navigator>
   );
 };
 
-const CustomerManageStack = () => {
+const CustomerOrdersStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <ManageStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <ManageStack.Screen name="CustomerManage" component={CustomerManageScreen} options={{ title: 'Manage' }} />
-      <ManageStack.Screen name="Cart" component={CartScreen} options={{ title: 'Cart' }} />
-      <ManageStack.Screen name="CustomerOrders" component={CustomerOrdersScreen} options={{ title: 'Orders' }} />
-      <ManageStack.Screen name="Order" component={OrderScreen} options={{ title: 'Checkout' }} />
-      <ManageStack.Screen
+    <OrdersStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <OrdersStack.Screen name="CustomerOrders" component={CustomerOrdersScreen} options={{ title: 'Orders' }} />
+      <OrdersStack.Screen
         name="OrderTracking"
         component={OrderTrackingScreen}
-        options={{ title: 'Track Orders' }}
+        options={{ title: 'Track Order' }}
       />
-      <ManageStack.Screen name="Chat" component={ChatScreen} options={{ title: 'Support Chat' }} />
-    </ManageStack.Navigator>
+      <OrdersStack.Screen name="Chat" component={ChatScreen} options={{ title: 'Support' }} />
+    </OrdersStack.Navigator>
+  );
+};
+
+const CustomerCartStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <CartStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <CartStack.Screen name="Cart" component={CartScreen} options={{ title: 'Cart' }} />
+      <CartStack.Screen name="Order" component={OrderScreen} options={{ title: 'Checkout' }} />
+      <CartStack.Screen
+        name="OrderTracking"
+        component={OrderTrackingScreen}
+        options={{ title: 'Track Order' }}
+      />
+      <CartStack.Screen name="Chat" component={ChatScreen} options={{ title: 'Support' }} />
+    </CartStack.Navigator>
   );
 };
 
@@ -76,18 +90,26 @@ const CustomerStack = () => {
   return (
     <Tab.Navigator screenOptions={buildTabScreenOptions(theme)}>
       <Tab.Screen
-        name="CustomerHomeTab"
-        component={CustomerHomeStack}
+        name="CustomerShopTab"
+        component={CustomerShopStack}
         options={{
-          title: 'Home',
+          title: 'Shop',
           ...renderTabGlyph('storefront-outline'),
         }}
       />
       <Tab.Screen
-        name="CustomerManageTab"
-        component={CustomerManageStack}
+        name="CustomerOrdersTab"
+        component={CustomerOrdersStack}
         options={{
-          title: 'Manage',
+          title: 'Orders',
+          ...renderTabGlyph('receipt-outline'),
+        }}
+      />
+      <Tab.Screen
+        name="CustomerCartTab"
+        component={CustomerCartStack}
+        options={{
+          title: 'Cart',
           tabBarBadge: itemCount ? (itemCount > 99 ? '99+' : itemCount) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: theme.colors.accent,

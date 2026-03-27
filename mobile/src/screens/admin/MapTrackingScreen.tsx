@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { StyleSheet, Text, View } from 'react-native';
+import { Marker } from 'react-native-maps';
+import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { MapPanel } from '../../components/MapPanel';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
 import api from '../../services/api';
@@ -24,6 +26,7 @@ const MapTrackingScreen = () => {
   const [locations, setLocations] = useState<WorkerLocation[]>([]);
   const [locationDetails, setLocationDetails] = useState<Record<string, LocationDetails>>({});
   const [error, setError] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const hydrateLocationDetails = useCallback(async (entries: WorkerLocation[]) => {
     const resolvedEntries = await Promise.all(
@@ -105,27 +108,53 @@ const MapTrackingScreen = () => {
         longitudeDelta: 0.12,
       }
     : fallbackRegion;
+  const latestHeartbeat = locations.reduce((latest, location) => {
+    if (!latest) {
+      return location.timestamp;
+    }
+
+    return new Date(location.timestamp).getTime() > new Date(latest).getTime()
+      ? location.timestamp
+      : latest;
+  }, '');
 
   return (
     <ScreenLayout title="Live Worker Map" subtitle="Every worker heartbeat appears here in real time.">
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {Platform.OS === 'android' && __DEV__ ? (
-        <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>Android map tiles</Text>
-          <Text style={styles.noticeText}>
-            If the live map is blank, rebuild Android with a valid `MAPS_API_KEY`. Worker pins
-            can still be opened externally from the list below.
-          </Text>
-        </View>
-      ) : null}
-      <View style={styles.mapShell}>
-        <MapView
-          liteMode={Platform.OS === 'android'}
-          loadingEnabled
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-          style={styles.map}
-          initialRegion={initialRegion}
-        >
+      <Card style={styles.summaryCard}>
+        <Text style={styles.summaryTitle}>Operations snapshot</Text>
+        <Text style={styles.summaryMeta}>Active workers in field: {locations.length}</Text>
+        <Text style={styles.summaryMeta}>
+          Latest heartbeat: {latestHeartbeat ? formatDateTime(latestHeartbeat) : 'Awaiting GPS activity'}
+        </Text>
+        <PrimaryButton
+          label="Refresh live feed"
+          loading={isRefreshing}
+          onPress={async () => {
+            setIsRefreshing(true);
+            await loadLocations();
+            setIsRefreshing(false);
+          }}
+          variant="ghost"
+        />
+      </Card>
+      <MapPanel
+        fallbackDescription="Open any worker card below to launch the exact position in your device maps."
+        fallbackTitle="Live tiles are temporarily unavailable."
+        initialRegion={initialRegion}
+        points={locations.map((location) => ({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }))}
+        statusLabel={locations.length ? `${locations.length} live` : 'Awaiting GPS'}
+        statusTone={locations.length ? 'accent' : 'muted'}
+        subtitle={
+          locations.length
+            ? 'Worker pins auto-fit on the map as fresh GPS heartbeats arrive.'
+            : 'Workers will appear here as soon as the field team starts sharing location.'
+        }
+        title="Field activity"
+      >
           {locations.map((location) => (
             <Marker
               key={location.workerId}
@@ -137,8 +166,7 @@ const MapTrackingScreen = () => {
               description={`Updated ${formatDateTime(location.timestamp)}`}
             />
           ))}
-        </MapView>
-      </View>
+      </MapPanel>
       {locations.length === 0 ? (
         <EmptyState title="No live workers yet" subtitle="Worker GPS heartbeats will appear once staff start their shift." />
       ) : (
@@ -172,15 +200,17 @@ const createStyles = (theme: AppTheme) =>
     error: {
       color: theme.colors.danger,
     },
-    mapShell: {
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      overflow: 'hidden',
+    summaryCard: {
+      gap: 8,
     },
-    map: {
-      height: 320,
-      width: '100%',
+    summaryTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    summaryMeta: {
+      color: theme.colors.textMuted,
     },
     locationCard: {
       backgroundColor: theme.colors.surface,
@@ -189,24 +219,6 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1,
       gap: 6,
       padding: theme.spacing.md,
-    },
-    noticeCard: {
-      backgroundColor: theme.colors.surfaceMuted,
-      borderColor: theme.colors.border,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      gap: 6,
-      padding: theme.spacing.md,
-    },
-    noticeTitle: {
-      color: theme.colors.text,
-      fontFamily: theme.fontFamily.heading,
-      fontSize: 15,
-      fontWeight: '700',
-    },
-    noticeText: {
-      color: theme.colors.textMuted,
-      lineHeight: 20,
     },
     workerName: {
       color: theme.colors.text,

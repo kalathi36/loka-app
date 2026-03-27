@@ -12,10 +12,7 @@ const AdminManageScreen = ({ navigation }: { navigation: any }) => {
   const styles = useThemedStyles(createStyles);
 
   return (
-    <ScreenLayout
-      title="Manage Operations"
-      subtitle="Dispatch, people, attendance, payroll, and customer communication all live here."
-    >
+    <ScreenLayout>
       <Card style={styles.hero}>
         <Text style={styles.heroEyebrow}>Operations deck</Text>
         <Text style={styles.heroTitle}>{user?.organization?.name || 'Loka Workspace'}</Text>
@@ -58,7 +55,7 @@ const AdminManageScreen = ({ navigation }: { navigation: any }) => {
           subtitle="Open product analytics, stock health, and sell-through signals."
           iconName="bar-chart-outline"
           accentColor="#8A6DFF"
-          onPress={() => navigation.getParent()?.navigate('AdminInsightsTab')}
+          onPress={() => navigation.navigate('ProductInsights')}
         />
         <ActionTile
           title="Customers"

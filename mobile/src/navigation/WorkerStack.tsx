@@ -9,7 +9,6 @@ import AttendanceScreen from '../screens/worker/AttendanceScreen';
 import EarningsScreen from '../screens/worker/EarningsScreen';
 import MapNavigationScreen from '../screens/worker/MapNavigationScreen';
 import WorkerHomeScreen from '../screens/worker/WorkerHomeScreen';
-import WorkerManageScreen from '../screens/worker/WorkerManageScreen';
 import EditProfileScreen from '../screens/common/EditProfileScreen';
 import ForgotPasswordScreen from '../screens/common/ForgotPasswordScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
@@ -22,40 +21,49 @@ import {
 import { useAppTheme } from '../theme/ThemeProvider';
 
 const Tab = createRoleTabNavigator();
-const HomeStack = createStackNavigator();
-const ManageStack = createStackNavigator();
+const TodayStack = createStackNavigator();
+const OrdersStack = createStackNavigator();
+const PayStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 
-const WorkerHomeStack = () => {
+const WorkerTodayStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <HomeStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <HomeStack.Screen name="WorkerHome" component={WorkerHomeScreen} options={{ title: 'Worker Hub' }} />
-    </HomeStack.Navigator>
+    <TodayStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <TodayStack.Screen name="WorkerHome" component={WorkerHomeScreen} options={{ title: 'Today' }} />
+      <TodayStack.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
+    </TodayStack.Navigator>
   );
 };
 
-const WorkerManageStack = () => {
+const WorkerOrdersStack = () => {
   const { theme } = useAppTheme();
 
   return (
-    <ManageStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
-      <ManageStack.Screen name="WorkerManage" component={WorkerManageScreen} options={{ title: 'Manage' }} />
-      <ManageStack.Screen
+    <OrdersStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <OrdersStack.Screen
         name="AssignedOrders"
         component={AssignedOrdersScreen}
-        options={{ title: 'Assigned Orders' }}
+        options={{ title: 'Orders' }}
       />
-      <ManageStack.Screen name="Attendance" component={AttendanceScreen} options={{ title: 'Attendance' }} />
-      <ManageStack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Earnings' }} />
-      <ManageStack.Screen name="Delivery" component={DeliveryScreen} options={{ title: 'Delivery Update' }} />
-      <ManageStack.Screen
+      <OrdersStack.Screen name="Delivery" component={DeliveryScreen} options={{ title: 'Delivery Update' }} />
+      <OrdersStack.Screen
         name="MapNavigation"
         component={MapNavigationScreen}
-        options={{ title: 'Navigation Map' }}
+        options={{ title: 'Live Map' }}
       />
-    </ManageStack.Navigator>
+    </OrdersStack.Navigator>
+  );
+};
+
+const WorkerPayStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <PayStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <PayStack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Pay' }} />
+    </PayStack.Navigator>
   );
 };
 
@@ -118,19 +126,27 @@ const WorkerStack = () => {
   return (
     <Tab.Navigator screenOptions={buildTabScreenOptions(theme)}>
       <Tab.Screen
-        name="WorkerHomeTab"
-        component={WorkerHomeStack}
+        name="WorkerTodayTab"
+        component={WorkerTodayStack}
         options={{
-          title: 'Home',
+          title: 'Today',
           ...renderTabGlyph('speedometer-outline'),
         }}
       />
       <Tab.Screen
-        name="WorkerManageTab"
-        component={WorkerManageStack}
+        name="WorkerOrdersTab"
+        component={WorkerOrdersStack}
         options={{
-          title: 'Manage',
-          ...renderTabGlyph('briefcase-outline'),
+          title: 'Orders',
+          ...renderTabGlyph('trail-sign-outline'),
+        }}
+      />
+      <Tab.Screen
+        name="WorkerPayTab"
+        component={WorkerPayStack}
+        options={{
+          title: 'Pay',
+          ...renderTabGlyph('wallet-outline'),
         }}
       />
       <Tab.Screen

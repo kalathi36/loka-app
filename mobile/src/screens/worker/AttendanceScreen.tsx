@@ -171,7 +171,7 @@ const AttendanceScreen = () => {
   };
 
   return (
-    <ScreenLayout title="Attendance" subtitle="Check in from the field with a verified GPS pin.">
+    <ScreenLayout>
       {todayRecord ? (
         <View style={styles.statusCard}>
           <Text style={styles.label}>Today</Text>

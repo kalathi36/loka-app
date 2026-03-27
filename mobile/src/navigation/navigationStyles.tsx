@@ -12,8 +12,13 @@ export const createRoleTabNavigator = createBottomTabNavigator;
 export const buildStackScreenOptions = (theme: AppTheme): StackNavigationOptions => ({
   cardStyle: { backgroundColor: theme.colors.background },
   headerBackTitleVisible: false,
-  headerStyle: { backgroundColor: theme.colors.background },
+  headerStyle: {
+    backgroundColor: theme.colors.background,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
   headerTintColor: theme.colors.text,
+  headerTitleAlign: 'center',
   headerLeft: ({ canGoBack, label, onPress, tintColor }) => {
     if (!canGoBack || !onPress) {
       return null;

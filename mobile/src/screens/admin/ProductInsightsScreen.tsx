@@ -155,22 +155,14 @@ const ProductInsightsScreen = ({ navigation }: { navigation: any }) => {
 
   if (loading && !insights) {
     return (
-      <ScreenLayout
-        flushTop
-        title="Product Insights"
-        subtitle="Stock health, category mix, and sell-through signals for your live catalog."
-      >
+      <ScreenLayout flushTop>
         <ProductInsightsSkeleton />
       </ScreenLayout>
     );
   }
 
   return (
-    <ScreenLayout
-      flushTop
-      title="Product Insights"
-      subtitle="Stock health, category mix, and sell-through signals for your live catalog."
-    >
+    <ScreenLayout flushTop>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.grid}>
