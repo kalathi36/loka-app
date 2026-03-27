@@ -111,7 +111,7 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
   return (
     <ScreenLayout title="Navigation Map" subtitle="Follow your current GPS pin and the customer drop point in one map view.">
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {Platform.OS === 'android' ? (
+      {Platform.OS === 'android' && __DEV__ ? (
         <View style={styles.noticeCard}>
           <Text style={styles.noticeTitle}>Android map tiles</Text>
           <Text style={styles.noticeText}>

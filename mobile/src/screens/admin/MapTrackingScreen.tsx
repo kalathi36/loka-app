@@ -109,7 +109,7 @@ const MapTrackingScreen = () => {
   return (
     <ScreenLayout title="Live Worker Map" subtitle="Every worker heartbeat appears here in real time.">
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {Platform.OS === 'android' ? (
+      {Platform.OS === 'android' && __DEV__ ? (
         <View style={styles.noticeCard}>
           <Text style={styles.noticeTitle}>Android map tiles</Text>
           <Text style={styles.noticeText}>

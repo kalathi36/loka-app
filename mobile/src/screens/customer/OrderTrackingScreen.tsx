@@ -148,7 +148,7 @@ const OrderTrackingScreen = ({ navigation, route }: { navigation: any; route: an
               </>
             ) : null}
           </Card>
-          {Platform.OS === 'android' ? (
+          {Platform.OS === 'android' && __DEV__ ? (
             <Card style={styles.mapNoticeCard}>
               <Text style={styles.mapNoticeTitle}>Android map tiles</Text>
               <Text style={styles.mapNoticeText}>
