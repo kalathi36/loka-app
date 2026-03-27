@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { DateRangeFilterCard } from '../../components/DateRangeFilterCard';
 import { EmptyState } from '../../components/EmptyState';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ScreenLayout } from '../../components/ScreenLayout';
@@ -15,7 +16,12 @@ import { useAuth } from '../../store/AuthContext';
 import { ApiEnvelope, LocationPoint } from '../../types';
 import { AppTheme } from '../../theme/theme';
 import { useThemedStyles } from '../../theme/useThemedStyles';
-import { extractErrorMessage, formatDate, formatTime } from '../../utils/formatters';
+import {
+  extractErrorMessage,
+  formatDate,
+  formatTime,
+  toDateInputValue,
+} from '../../utils/formatters';
 
 interface AttendanceWorkerResponse {
   records: Array<{
@@ -35,6 +41,11 @@ const AttendanceScreen = () => {
   const [todayRecord, setTodayRecord] = useState<AttendanceWorkerResponse['records'][number] | null>(null);
   const [history, setHistory] = useState<AttendanceWorkerResponse['records']>([]);
   const [error, setError] = useState('');
+  const [fromDateInput, setFromDateInput] = useState('');
+  const [toDateInput, setToDateInput] = useState('');
+  const [appliedFromDate, setAppliedFromDate] = useState('');
+  const [appliedToDate, setAppliedToDate] = useState('');
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const loadLocation = useCallback(async () => {
@@ -56,21 +67,20 @@ const AttendanceScreen = () => {
     }
   }, []);
 
-  const loadAttendanceHistory = useCallback(async () => {
+  const loadTodayRecord = useCallback(async () => {
     try {
       const response = await api.get<ApiEnvelope<AttendanceWorkerResponse>>(
         `/attendance/worker/${user?._id}`,
+        {
+          params: {
+            from: toDateInputValue(new Date()),
+            to: toDateInputValue(new Date()),
+          },
+        },
       );
-      const today = formatDate(new Date());
-      setHistory(response.data.data.records);
-      setTodayRecord(
-        response.data.data.records.find(
-          (record: AttendanceWorkerResponse['records'][number]) => formatDate(record.date) === today,
-        ) || null,
-      );
+      setTodayRecord(response.data.data.records[0] || null);
     } catch (attendanceError) {
       if (getApiErrorStatus(attendanceError) === 404) {
-        setHistory([]);
         setTodayRecord(null);
         setError('Attendance history is unavailable until the latest backend is deployed.');
         return;
@@ -80,10 +90,38 @@ const AttendanceScreen = () => {
     }
   }, [user?._id]);
 
+  const loadAttendanceHistory = useCallback(async () => {
+    try {
+      setLoadingHistory(true);
+      setError('');
+      const response = await api.get<ApiEnvelope<AttendanceWorkerResponse>>(
+        `/attendance/worker/${user?._id}`,
+        {
+          params: {
+            from: appliedFromDate || undefined,
+            to: appliedToDate || undefined,
+          },
+        },
+      );
+      setHistory(response.data.data.records);
+    } catch (attendanceError) {
+      if (getApiErrorStatus(attendanceError) === 404) {
+        setHistory([]);
+        setError('Attendance history is unavailable until the latest backend is deployed.');
+        return;
+      }
+
+      setError(extractErrorMessage(attendanceError));
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [appliedFromDate, appliedToDate, user?._id]);
+
   useEffect(() => {
     loadLocation();
+    loadTodayRecord();
     loadAttendanceHistory();
-  }, [loadAttendanceHistory, loadLocation]);
+  }, [loadAttendanceHistory, loadLocation, loadTodayRecord]);
 
   const handleAttendance = async (type: 'checkin' | 'checkout') => {
     if (!location) {
@@ -101,7 +139,7 @@ const AttendanceScreen = () => {
         title: type === 'checkin' ? 'Checked in' : 'Checked out',
         message: 'Attendance was recorded successfully.',
       });
-      await loadAttendanceHistory();
+      await Promise.all([loadTodayRecord(), loadAttendanceHistory()]);
     } catch (attendanceError) {
       if (type === 'checkin' && getApiErrorStatus(attendanceError) === 404) {
         await api.post('/workers/attendance', location);
@@ -110,7 +148,7 @@ const AttendanceScreen = () => {
           title: 'Checked in',
           message: 'Attendance was recorded using the legacy worker endpoint.',
         });
-        await loadAttendanceHistory();
+        await Promise.all([loadTodayRecord(), loadAttendanceHistory()]);
         return;
       }
 
@@ -118,6 +156,18 @@ const AttendanceScreen = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const applyDateFilter = () => {
+    setAppliedFromDate(fromDateInput.trim());
+    setAppliedToDate(toDateInput.trim());
+  };
+
+  const clearDateFilter = () => {
+    setFromDateInput('');
+    setToDateInput('');
+    setAppliedFromDate('');
+    setAppliedToDate('');
   };
 
   return (
@@ -135,7 +185,9 @@ const AttendanceScreen = () => {
         <View style={styles.locationCard}>
           <Text style={styles.label}>Current location</Text>
           <Text style={styles.value}>{locationDetails?.title || 'Fetching place details...'}</Text>
-          <Text style={styles.statusText}>{locationDetails?.subtitle || 'Live coordinates captured for attendance.'}</Text>
+          <Text style={styles.statusText}>
+            {locationDetails?.subtitle || 'Live coordinates captured for attendance.'}
+          </Text>
           <Text style={styles.locationMeta}>{locationDetails?.coordinates || ''}</Text>
         </View>
       ) : (
@@ -156,14 +208,38 @@ const AttendanceScreen = () => {
         loading={submitting}
         disabled={!todayRecord?.checkInTime || Boolean(todayRecord?.checkOutTime)}
       />
-      {history.slice(0, 5).map((record) => (
-        <View key={record._id} style={styles.historyCard}>
-          <Text style={styles.historyTitle}>{formatDate(record.date)}</Text>
-          <Text style={styles.historyMeta}>
-            In {formatTime(record.checkInTime)} • Out {formatTime(record.checkOutTime)}
-          </Text>
-        </View>
-      ))}
+
+      <DateRangeFilterCard
+        fromDate={fromDateInput}
+        loading={loadingHistory}
+        onApply={applyDateFilter}
+        onChangeFromDate={setFromDateInput}
+        onChangeToDate={setToDateInput}
+        onClear={clearDateFilter}
+        toDate={toDateInput}
+      />
+
+      <View style={styles.historyHeader}>
+        <Text style={styles.historySectionTitle}>Attendance History</Text>
+        <Text style={styles.historySummary}>
+          {history.length} shift {history.length === 1 ? 'record' : 'records'} in range
+        </Text>
+      </View>
+      {history.length ? (
+        history.map((record) => (
+          <View key={record._id} style={styles.historyCard}>
+            <Text style={styles.historyTitle}>{formatDate(record.date)}</Text>
+            <Text style={styles.historyMeta}>
+              In {formatTime(record.checkInTime)} • Out {formatTime(record.checkOutTime)}
+            </Text>
+          </View>
+        ))
+      ) : (
+        <EmptyState
+          title="No history for this range"
+          subtitle="Try a wider date range to see more attendance records."
+        />
+      )}
     </ScreenLayout>
   );
 };
@@ -220,6 +296,18 @@ const createStyles = (theme: AppTheme) =>
       fontWeight: '700',
     },
     historyMeta: {
+      color: theme.colors.textMuted,
+    },
+    historyHeader: {
+      gap: 4,
+    },
+    historySectionTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    historySummary: {
       color: theme.colors.textMuted,
     },
   });

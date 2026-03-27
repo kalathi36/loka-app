@@ -2,6 +2,7 @@ const express = require('express');
 const {
   getAnalytics,
   getDashboard,
+  getProductInsights,
   getWorkerLocations,
   getCustomers,
   getWorkerPayments,
@@ -16,6 +17,7 @@ router.use(protect, authorizeRoles('admin'));
 
 router.get('/analytics', getAnalytics);
 router.get('/dashboard', getDashboard);
+router.get('/product-insights', getProductInsights);
 router.get('/worker-locations', getWorkerLocations);
 router.get('/customers', getCustomers);
 router.get('/payments', getWorkerPayments);

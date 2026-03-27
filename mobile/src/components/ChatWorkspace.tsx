@@ -1,3 +1,4 @@
+import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -5,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +21,7 @@ import { useAuth } from '../store/AuthContext';
 import { AppIcon } from './AppIcon';
 import { EmptyState } from './EmptyState';
 import { ScreenLayout } from './ScreenLayout';
+import { SkeletonBlock } from './SkeletonBlock';
 import { useAppTheme } from '../theme/ThemeProvider';
 
 interface ChatWorkspaceProps {
@@ -61,9 +62,9 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [socketConnected, setSocketConnected] = useState(Boolean(getSocket()?.connected));
 
   const conversationCards = useMemo<ChatThread[]>(
     () =>
@@ -75,6 +76,11 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
             lastMessage: null,
           })),
     [contacts, threads],
+  );
+
+  const activeThread = useMemo(
+    () => threads.find((thread) => thread.partner._id === selectedContact?._id) || null,
+    [selectedContact?._id, threads],
   );
 
   const syncInbox = useCallback(async () => {
@@ -128,7 +134,6 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
       setError(extractErrorMessage(loadError));
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -160,6 +165,20 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
     }
   }, [loadMessages, selectedContact?._id]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const intervalId = setInterval(() => {
+        syncInbox();
+
+        if (selectedContact?._id) {
+          loadMessages(selectedContact._id);
+        }
+      }, 3500);
+
+      return () => clearInterval(intervalId);
+    }, [loadMessages, selectedContact?._id, syncInbox]),
+  );
+
   useEffect(() => {
     if (!messages.length) {
       return;
@@ -178,6 +197,8 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
     if (!socket) {
       return;
     }
+
+    setSocketConnected(socket.connected);
 
     const upsertThread = (incomingMessage: ChatMessage) => {
       const partner =
@@ -221,12 +242,31 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
       });
     };
 
+    const onConnect = () => {
+      setSocketConnected(true);
+
+      if (selectedContact?._id) {
+        joinChatRoom(selectedContact._id);
+        loadMessages(selectedContact._id);
+      }
+
+      syncInbox();
+    };
+
+    const onDisconnect = () => {
+      setSocketConnected(false);
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
     socket.on('chat:new', onNewMessage);
 
     return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
       socket.off('chat:new', onNewMessage);
     };
-  }, [selectedContact?._id, user?._id]);
+  }, [loadMessages, selectedContact?._id, syncInbox, user?._id]);
 
   const sendMessage = async () => {
     if (!selectedContact || !draft.trim()) {
@@ -262,20 +302,33 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
     }
   };
 
-  const refreshConversation = async () => {
-    setRefreshing(true);
-    await syncInbox();
-
-    if (selectedContact?._id) {
-      await loadMessages(selectedContact._id);
-    }
-  };
-
   const sendDisabled = !selectedContact || !draft.trim() || sending;
   return (
     <ScreenLayout scroll={false} contentStyle={styles.container}>
       {loading ? (
-        <EmptyState title="Loading chats" subtitle="Fetching the latest conversation threads." />
+        <View style={styles.loadingShell}>
+          <View style={styles.storyHeader}>
+            <View>
+              <SkeletonBlock height={12} style={styles.skeletonEyebrow} width={110} />
+              <SkeletonBlock height={30} style={styles.skeletonTitle} width={180} />
+            </View>
+            <SkeletonBlock height={36} radius={18} width={36} />
+          </View>
+          <View style={styles.loadingStories}>
+            {[0, 1, 2].map((item) => (
+              <View key={`story-skeleton-${item}`} style={styles.loadingStory}>
+                <SkeletonBlock height={64} radius={32} width={64} />
+                <SkeletonBlock height={12} style={styles.skeletonText} width={72} />
+                <SkeletonBlock height={10} width={52} />
+              </View>
+            ))}
+          </View>
+          <View style={styles.loadingMessages}>
+            <SkeletonBlock height={74} radius={20} width="72%" />
+            <SkeletonBlock height={74} radius={20} style={styles.loadingOwnMessage} width="62%" />
+            <SkeletonBlock height={74} radius={20} width="68%" />
+          </View>
+        </View>
       ) : contacts.length === 0 ? (
         <EmptyState
           title="No contacts yet"
@@ -293,9 +346,10 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
                 <Text style={styles.storyEyebrow}>Conversations</Text>
                 <Text style={styles.storyTitle}>Open threads</Text>
               </View>
-              <Pressable onPress={refreshConversation} style={styles.refreshButton}>
-                <AppIcon name="refresh-outline" size={18} color={theme.colors.accent} />
-              </Pressable>
+              <View style={styles.livePill}>
+                <View style={[styles.liveDot, !socketConnected ? styles.liveDotOffline : null]} />
+                <Text style={styles.liveLabel}>{socketConnected ? 'Live' : 'Reconnecting'}</Text>
+              </View>
             </View>
             <FlatList
               data={conversationCards}
@@ -327,6 +381,7 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
               }}
             />
           </View>
+
           {error ? (
             <View style={styles.errorBanner}>
               <AppIcon name="alert-circle-outline" size={18} color={theme.colors.danger} />
@@ -340,7 +395,6 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
             showsVerticalScrollIndicator={false}
             style={styles.messageList}
             contentContainerStyle={styles.messages}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshConversation} tintColor={theme.colors.accent} />}
             renderItem={({ item }) => {
               const isOwnMessage = getEntityId(item.sender) === user?._id;
               return (
@@ -370,7 +424,11 @@ export const ChatWorkspace = ({ title: _title, subtitle: _subtitle }: ChatWorksp
               <AppIcon name="chatbubble-ellipses-outline" size={18} color={theme.colors.textMuted} />
               <TextInput
                 multiline
-                placeholder={selectedContact ? `Reply to ${selectedContact.name}` : 'Select a conversation'}
+                placeholder={
+                  selectedContact
+                    ? `Reply to ${selectedContact.name}${activeThread?.lastMessage ? ` · ${activeThread.lastMessage.message.slice(0, 18)}${activeThread.lastMessage.message.length > 18 ? '…' : ''}` : ''}`
+                    : 'Select a conversation'
+                }
                 placeholderTextColor={theme.colors.textMuted}
                 style={styles.composerInput}
                 value={draft}
@@ -410,6 +468,61 @@ const createStyles = (theme: AppTheme) =>
     flex: {
       flex: 1,
       gap: theme.spacing.sm,
+    },
+    loadingMessages: {
+      gap: theme.spacing.md,
+      marginTop: theme.spacing.sm,
+    },
+    loadingOwnMessage: {
+      alignSelf: 'flex-end',
+    },
+    loadingShell: {
+      gap: theme.spacing.md,
+    },
+    loadingStories: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+    },
+    loadingStory: {
+      alignItems: 'center',
+      gap: 8,
+    },
+    liveDot: {
+      backgroundColor: theme.colors.success,
+      borderRadius: 999,
+      height: 8,
+      width: 8,
+    },
+    liveDotOffline: {
+      backgroundColor: theme.colors.warning,
+    },
+    liveLabel: {
+      color: theme.colors.textMuted,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    livePill: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderColor: theme.colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 8,
+      minHeight: 34,
+      paddingHorizontal: 12,
+    },
+    skeletonEyebrow: {
+      marginBottom: 8,
+    },
+    skeletonText: {
+      marginTop: 2,
+    },
+    skeletonTitle: {
+      marginBottom: 2,
     },
     threadRail: {
       gap: theme.spacing.sm,
@@ -488,14 +601,6 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textMuted,
       fontSize: 10,
       textTransform: 'uppercase',
-    },
-    refreshButton: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.surfaceRaised,
-      borderRadius: 16,
-      height: 34,
-      justifyContent: 'center',
-      width: 34,
     },
     errorBanner: {
       alignItems: 'center',

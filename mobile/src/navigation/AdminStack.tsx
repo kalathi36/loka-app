@@ -2,6 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import AdminChatScreen from '../screens/admin/AdminChatScreen';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
+import ProductInsightsScreen from '../screens/admin/ProductInsightsScreen';
 import AdminManageScreen from '../screens/admin/AdminManageScreen';
 import AssignWorkerScreen from '../screens/admin/AssignWorkerScreen';
 import AttendanceManagementScreen from '../screens/admin/AttendanceManagementScreen';
@@ -25,6 +26,7 @@ import { useAppTheme } from '../theme/ThemeProvider';
 const Tab = createRoleTabNavigator();
 const HomeStack = createStackNavigator();
 const ManageStack = createStackNavigator();
+const InsightsStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 
 const AdminHomeStack = () => {
@@ -68,6 +70,20 @@ const AdminManageStack = () => {
   );
 };
 
+const AdminInsightsStack = () => {
+  const { theme } = useAppTheme();
+
+  return (
+    <InsightsStack.Navigator screenOptions={buildStackScreenOptions(theme)}>
+      <InsightsStack.Screen
+        name="ProductInsights"
+        component={ProductInsightsScreen}
+        options={{ title: 'Insights' }}
+      />
+    </InsightsStack.Navigator>
+  );
+};
+
 const AdminProfileStack = () => {
   const { theme } = useAppTheme();
 
@@ -95,6 +111,14 @@ const AdminStack = () => {
         options={{
           title: 'Home',
           ...renderTabGlyph('stats-chart-outline'),
+        }}
+      />
+      <Tab.Screen
+        name="AdminInsightsTab"
+        component={AdminInsightsStack}
+        options={{
+          title: 'Insights',
+          ...renderTabGlyph('bar-chart-outline'),
         }}
       />
       <Tab.Screen

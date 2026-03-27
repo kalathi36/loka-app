@@ -16,6 +16,7 @@ import {
   createRoleTabNavigator,
   renderTabGlyph,
 } from './navigationStyles';
+import { useCart } from '../store/CartContext';
 import { useAppTheme } from '../theme/ThemeProvider';
 
 const Tab = createRoleTabNavigator();
@@ -70,6 +71,7 @@ const CustomerProfileStack = () => {
 
 const CustomerStack = () => {
   const { theme } = useAppTheme();
+  const { itemCount } = useCart();
 
   return (
     <Tab.Navigator screenOptions={buildTabScreenOptions(theme)}>
@@ -86,6 +88,10 @@ const CustomerStack = () => {
         component={CustomerManageStack}
         options={{
           title: 'Manage',
+          tabBarBadge: itemCount ? (itemCount > 99 ? '99+' : itemCount) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: theme.colors.accent,
+          },
           ...renderTabGlyph('bag-handle-outline'),
         }}
       />

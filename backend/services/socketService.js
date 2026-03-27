@@ -33,6 +33,13 @@ const initSocket = (httpServer) => {
       origin: process.env.CLIENT_URL || '*',
       methods: ['GET', 'POST'],
     },
+    transports: ['websocket', 'polling'],
+    pingInterval: 25000,
+    pingTimeout: 30000,
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 120000,
+      skipMiddlewares: false,
+    },
   });
 
   io.use(async (socket, next) => {

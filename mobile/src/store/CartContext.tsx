@@ -4,6 +4,7 @@ import { CartItem, Product } from '../types';
 
 interface CartContextValue {
   items: CartItem[];
+  itemCount: number;
   totalAmount: number;
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
@@ -59,11 +60,13 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <CartContext.Provider
       value={{
         items,
+        itemCount,
         totalAmount,
         addToCart,
         removeFromCart,

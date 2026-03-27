@@ -2,7 +2,7 @@ const Attendance = require('../models/Attendance');
 const GPSLog = require('../models/GPSLog');
 const User = require('../models/User');
 const WorkerPayment = require('../models/WorkerPayment');
-const { getDashboardAnalytics } = require('../services/analyticsService');
+const { getDashboardAnalytics, getProductInsightsAnalytics } = require('../services/analyticsService');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { getOrganizationId } = require('../utils/organizationScope');
@@ -74,6 +74,15 @@ const getDashboard = asyncHandler(async (req, res) => {
       recentOrders: analytics.recentOrders,
       ordersByStatus: analytics.ordersByStatus,
     },
+  });
+});
+
+const getProductInsights = asyncHandler(async (req, res) => {
+  const insights = await getProductInsightsAnalytics(getOrganizationId(req.user));
+
+  res.json({
+    success: true,
+    data: insights,
   });
 });
 
@@ -212,6 +221,7 @@ const createWorkerPayment = asyncHandler(async (req, res) => {
 module.exports = {
   getAnalytics,
   getDashboard,
+  getProductInsights,
   getWorkerLocations,
   getCustomers,
   getWorkerPayments,

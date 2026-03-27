@@ -13,7 +13,7 @@ const getProducts = asyncHandler(async (req, res) => {
 });
 
 const createProduct = asyncHandler(async (req, res) => {
-  const { name, price, category, stock } = req.body;
+  const { name, price, category, stock, description, imageUrl } = req.body;
 
   if (!name || price === undefined || !category) {
     throw new ApiError('Name, price, and category are required.', 400);
@@ -24,6 +24,8 @@ const createProduct = asyncHandler(async (req, res) => {
     name,
     price,
     category,
+    description: description || '',
+    imageUrl: imageUrl || '',
     stock: stock ?? 0,
   });
 
@@ -41,7 +43,7 @@ const updateProduct = asyncHandler(async (req, res) => {
     throw new ApiError('Product not found.', 404);
   }
 
-  ['name', 'price', 'category', 'stock'].forEach((field) => {
+  ['name', 'price', 'category', 'stock', 'description', 'imageUrl'].forEach((field) => {
     if (req.body[field] !== undefined) {
       product[field] = req.body[field];
     }

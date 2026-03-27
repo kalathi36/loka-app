@@ -1,6 +1,9 @@
+import Clipboard from '@react-native-clipboard/clipboard';
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { AppIcon } from '../../components/AppIcon';
 import api, { getApiErrorStatus } from '../../services/api';
+import { showToast } from '../../services/toast';
 import { useAuth } from '../../store/AuthContext';
 import { AdminDashboard, Analytics, ApiEnvelope } from '../../types';
 import { AppTheme } from '../../theme/theme';
@@ -39,6 +42,35 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const orgCode = user?.organization?.code || '';
+
+  const copyCode = useCallback(() => {
+    if (!orgCode) {
+      return;
+    }
+
+    Clipboard.setString(orgCode);
+    showToast({
+      type: 'success',
+      title: 'Code copied',
+      message: 'Organization code copied to clipboard.',
+    });
+  }, [orgCode]);
+
+  const shareCode = useCallback(async () => {
+    if (!orgCode) {
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `Join ${user?.organization?.name || 'our organization'} on Loka with code: ${orgCode}`,
+        title: 'Loka organization code',
+      });
+    } catch (shareError) {
+      setError(extractErrorMessage(shareError));
+    }
+  }, [orgCode, user?.organization?.name]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -99,6 +131,16 @@ const AdminDashboardScreen = ({ navigation }: { navigation: any }) => {
             <Text style={styles.heroChipLabel}>Salary paid</Text>
             <Text style={styles.heroChipValue}>{formatCurrency(dashboard?.totalPaidToWorkers || 0)}</Text>
           </View>
+        </View>
+        <View style={styles.heroActions}>
+          <Pressable onPress={copyCode} style={styles.heroActionButton}>
+            <AppIcon color={theme.colors.accent} name="copy-outline" size={18} />
+            <Text style={styles.heroActionLabel}>Copy code</Text>
+          </Pressable>
+          <Pressable onPress={shareCode} style={styles.heroActionButton}>
+            <AppIcon color={theme.colors.accent} name="share-social-outline" size={18} />
+            <Text style={styles.heroActionLabel}>Share code</Text>
+          </Pressable>
         </View>
       </View>
       <View style={styles.grid}>
@@ -227,6 +269,31 @@ const createStyles = (theme: AppTheme) =>
       fontFamily: theme.fontFamily.heading,
       fontSize: 14,
       fontWeight: '700',
+    },
+    heroActions: {
+      flexDirection: 'row',
+      gap: theme.spacing.sm,
+    },
+    heroActionButton: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceMuted,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'center',
+      minHeight: 42,
+      paddingHorizontal: theme.spacing.md,
+    },
+    heroActionLabel: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
     },
     grid: {
       flexDirection: 'row',

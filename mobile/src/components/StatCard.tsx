@@ -28,7 +28,9 @@ export const StatCard = ({ label, value, accent, iconName = 'sparkles-outline', 
         </View>
       </View>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={2} style={styles.value}>
+        {value}
+      </Text>
       {helper ? <Text style={styles.helper}>{helper}</Text> : null}
     </Card>
   );
@@ -73,8 +75,9 @@ const createStyles = (theme: AppTheme) =>
     value: {
       color: theme.colors.text,
       fontFamily: theme.fontFamily.heading,
-      fontSize: 28,
+      fontSize: 18,
       fontWeight: '700',
+      lineHeight: 28,
     },
     helper: {
       color: theme.colors.textMuted,

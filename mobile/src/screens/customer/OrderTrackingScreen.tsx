@@ -148,8 +148,19 @@ const OrderTrackingScreen = ({ navigation, route }: { navigation: any; route: an
               </>
             ) : null}
           </Card>
+          {Platform.OS === 'android' ? (
+            <Card style={styles.mapNoticeCard}>
+              <Text style={styles.mapNoticeTitle}>Android map tiles</Text>
+              <Text style={styles.mapNoticeText}>
+                If this panel looks blank, rebuild Android with a valid Google Maps key in
+                {' '}`MAPS_API_KEY`. You can still open the exact delivery point below.
+              </Text>
+            </Card>
+          ) : null}
           <View style={styles.mapShell}>
             <MapView
+              liteMode={Platform.OS === 'android'}
+              loadingEnabled
               provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
               style={styles.map}
               initialRegion={initialRegion}
@@ -241,6 +252,19 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textMuted,
       fontSize: 12,
       lineHeight: 18,
+    },
+    mapNoticeCard: {
+      gap: 6,
+    },
+    mapNoticeTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    mapNoticeText: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
     },
     selectedOrder: {
       borderColor: theme.colors.accentSecondary,

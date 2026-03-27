@@ -54,6 +54,13 @@ const AdminManageScreen = ({ navigation }: { navigation: any }) => {
           onPress={() => navigation.navigate('Payments')}
         />
         <ActionTile
+          title="Insights"
+          subtitle="Open product analytics, stock health, and sell-through signals."
+          iconName="bar-chart-outline"
+          accentColor="#8A6DFF"
+          onPress={() => navigation.getParent()?.navigate('AdminInsightsTab')}
+        />
+        <ActionTile
           title="Customers"
           subtitle="See all customers linked to this organization."
           iconName="people-circle-outline"

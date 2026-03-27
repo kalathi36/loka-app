@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,6 +22,7 @@ interface ScreenLayoutProps {
   children: React.ReactNode;
   scroll?: boolean;
   rightAction?: React.ReactNode;
+  floatingAction?: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
   flushTop?: boolean;
 }
@@ -31,13 +33,42 @@ export const ScreenLayout = ({
   children,
   scroll = true,
   rightAction,
+  floatingAction,
   contentStyle,
   flushTop = true,
 }: ScreenLayoutProps) => {
   const { theme } = useAppTheme();
   const styles = useThemedStyles(createStyles);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        speed: 18,
+        bounciness: 5,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
+
   const content = (
-    <View style={[styles.content, contentStyle]}>
+    <Animated.View
+      style={[
+        styles.content,
+        contentStyle,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
       {title || rightAction ? (
         <View style={[styles.header, flushTop ? styles.headerFlushTop : null]}>
           <View style={styles.headerText}>
@@ -48,7 +79,7 @@ export const ScreenLayout = ({
         </View>
       ) : null}
       {children}
-    </View>
+    </Animated.View>
   );
 
   return (
@@ -79,6 +110,7 @@ export const ScreenLayout = ({
           content
         )}
       </KeyboardAvoidingView>
+      {floatingAction ? <View style={styles.floatingActionSlot}>{floatingAction}</View> : null}
     </SafeAreaView>
   );
 };
@@ -132,6 +164,11 @@ const createStyles = (theme: AppTheme) =>
       flex: 1,
       gap: 8,
       paddingRight: theme.spacing.md,
+    },
+    floatingActionSlot: {
+      bottom: 92,
+      position: 'absolute',
+      right: theme.spacing.md,
     },
     title: {
       color: theme.colors.text,

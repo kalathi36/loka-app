@@ -109,8 +109,19 @@ const MapTrackingScreen = () => {
   return (
     <ScreenLayout title="Live Worker Map" subtitle="Every worker heartbeat appears here in real time.">
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {Platform.OS === 'android' ? (
+        <View style={styles.noticeCard}>
+          <Text style={styles.noticeTitle}>Android map tiles</Text>
+          <Text style={styles.noticeText}>
+            If the live map is blank, rebuild Android with a valid `MAPS_API_KEY`. Worker pins
+            can still be opened externally from the list below.
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.mapShell}>
         <MapView
+          liteMode={Platform.OS === 'android'}
+          loadingEnabled
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
           style={styles.map}
           initialRegion={initialRegion}
@@ -178,6 +189,24 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1,
       gap: 6,
       padding: theme.spacing.md,
+    },
+    noticeCard: {
+      backgroundColor: theme.colors.surfaceMuted,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      gap: 6,
+      padding: theme.spacing.md,
+    },
+    noticeTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    noticeText: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
     },
     workerName: {
       color: theme.colors.text,

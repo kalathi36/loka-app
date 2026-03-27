@@ -54,6 +54,8 @@ export interface Product {
   name: string;
   price: number;
   category: string;
+  description?: string;
+  imageUrl?: string;
   stock: number;
 }
 
@@ -109,6 +111,57 @@ export interface AdminDashboard {
   totalPaidToWorkers: number;
   recentOrders: Order[];
   ordersByStatus: Record<OrderStatus, number>;
+}
+
+export interface ProductInsightSummary {
+  totalProducts: number;
+  totalCategories: number;
+  totalUnitsInStock: number;
+  inventoryValue: number;
+  averagePrice: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  totalUnitsSold: number;
+  orderedValue: number;
+}
+
+export interface ProductCategoryInsight {
+  category: string;
+  productCount: number;
+  stockUnits: number;
+  inventoryValue: number;
+  averagePrice: number;
+}
+
+export interface ProductSalesInsight {
+  productId?: string;
+  name: string;
+  category: string;
+  stock: number;
+  price: number;
+  imageUrl?: string;
+  unitsSold: number;
+  orderCount: number;
+  revenue: number;
+}
+
+export interface ProductInventoryInsight {
+  _id: string;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductInsights {
+  summary: ProductInsightSummary;
+  categoryBreakdown: ProductCategoryInsight[];
+  topSelling: ProductSalesInsight[];
+  lowStockProducts: ProductInventoryInsight[];
+  newestProducts: ProductInventoryInsight[];
 }
 
 export interface PaymentDashboard {

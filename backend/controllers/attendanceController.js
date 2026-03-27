@@ -122,11 +122,25 @@ const getWorkerAttendance = asyncHandler(async (req, res) => {
     throw new ApiError('Worker not found.', 404);
   }
 
+  const query = {
+    organizationId,
+    workerId: targetWorkerId,
+  };
+
+  if (req.query.from || req.query.to) {
+    query.date = {};
+
+    if (req.query.from) {
+      query.date.$gte = startOfDay(new Date(req.query.from));
+    }
+
+    if (req.query.to) {
+      query.date.$lte = endOfDay(new Date(req.query.to));
+    }
+  }
+
   const records = await populateAttendance(
-    Attendance.find({
-      organizationId,
-      workerId: targetWorkerId,
-    }).sort({ date: -1 }),
+    Attendance.find(query).sort({ date: -1, createdAt: -1 }),
   );
 
   res.json({

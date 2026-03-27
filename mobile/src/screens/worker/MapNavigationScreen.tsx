@@ -111,8 +111,19 @@ const MapNavigationScreen = ({ route }: { route: any }) => {
   return (
     <ScreenLayout title="Navigation Map" subtitle="Follow your current GPS pin and the customer drop point in one map view.">
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {Platform.OS === 'android' ? (
+        <View style={styles.noticeCard}>
+          <Text style={styles.noticeTitle}>Android map tiles</Text>
+          <Text style={styles.noticeText}>
+            If this panel is blank, rebuild Android with a valid `MAPS_API_KEY`. You can still
+            open the drop point in your phone maps below.
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.mapShell}>
         <MapView
+          liteMode={Platform.OS === 'android'}
+          loadingEnabled
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
           style={styles.map}
           initialRegion={initialRegion}
@@ -186,6 +197,24 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1,
       gap: 8,
       padding: theme.spacing.md,
+    },
+    noticeCard: {
+      backgroundColor: theme.colors.surfaceMuted,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      gap: 6,
+      padding: theme.spacing.md,
+    },
+    noticeTitle: {
+      color: theme.colors.text,
+      fontFamily: theme.fontFamily.heading,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    noticeText: {
+      color: theme.colors.textMuted,
+      lineHeight: 20,
     },
     infoTitle: {
       color: theme.colors.text,

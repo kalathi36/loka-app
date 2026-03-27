@@ -43,6 +43,13 @@ export const formatTime = (value?: string | Date | null) => {
   });
 };
 
+export const toDateInputValue = (value: string | Date = new Date()) => {
+  const nextDate = new Date(value);
+  const timezoneOffset = nextDate.getTimezoneOffset() * 60000;
+
+  return new Date(nextDate.getTime() - timezoneOffset).toISOString().slice(0, 10);
+};
+
 export const humanizeStatus = (status: OrderStatus) =>
   status.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 
